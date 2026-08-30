@@ -28,7 +28,7 @@ import mutagen
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, APIC, ID3NoHeaderError
 
 # Default configuration
-DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=PLX8g6vXOji2rDj1mP9D8rwjBDffhy_bvc"
+DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 DEFAULT_OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
 DEFAULT_THREADS = 3
 DEFAULT_BITRATE = "320k"

@@ -75,8 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Quick Action Chips
     document.getElementById('chip-my-list').addEventListener('click', () => {
-        inputUrl.value = "https://music.youtube.com/playlist?list=PLX8g6vXOji2rDj1mP9D8rwjBDffhy_bvc";
-        showToast("Loaded your YouTube Music playlist!");
+        inputUrl.value = "https://music.youtube.com/playlist?list=RDCLAK5uy_n9Fbdw7e6ap-98_A-8JYMwLLacZleCcD8";
+        showToast("Loaded Top Hits playlist!");
     });
     document.getElementById('chip-spotify-hit').addEventListener('click', () => {
         inputUrl.value = "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M";
