@@ -56,8 +56,8 @@ All installable and portable packages are available in this folder for easy shar
 ## 🍏 macOS Installation (.dmg)
 
 **File to Share:**
-👉 [`MusicStudio-macOS.dmg`](file:///Users/sahas/Documents/Projects/spotifydownloder/releases/MusicStudio-macOS.dmg) (66 MB)
-*(Architecture: Apple Silicon M1/M2/M3/M4. Minimum macOS: Big Sur 11.0+)*
+👉 [`MusicStudio-macOS.dmg`](file:///Users/sahas/Documents/Projects/spotifydownloder/releases/MusicStudio-macOS.dmg) (69 MB)  
+*(Architecture: Apple Silicon M1/M2/M3/M4/M5 • Minimum macOS: Big Sur 11.0+ • Version 3.3.0)*
 
 ### How to Install on Mac:
 1. Double-click **`MusicStudio-macOS.dmg`** to mount the disk image.

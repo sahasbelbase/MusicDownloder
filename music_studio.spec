@@ -61,6 +61,7 @@ hiddenimports = [
     'fix_metadata',
     'ssl_helper',
     'mac_notch',
+    'mac_icon_helper',
     'WebKit',
     'PyObjCTools',
     'PyObjCTools.AppHelper',
@@ -122,8 +123,8 @@ if sys.platform == 'darwin':
         icon=os.path.join(BASE_DIR, 'MusicStudio.icns') if os.path.exists(os.path.join(BASE_DIR, 'MusicStudio.icns')) else None,
         bundle_identifier='com.musicstudio.app',
         info_plist={
-            'CFBundleShortVersionString': '3.2.0',
-            'CFBundleVersion': '3.2.0',
+            'CFBundleShortVersionString': '3.3.0',
+            'CFBundleVersion': '3.3.0',
             'NSHighResolutionCapable': 'True',
             'LSMinimumSystemVersion': '11.0',
             'NSHumanReadableCopyright': 'Copyright © 2026 Music Studio',

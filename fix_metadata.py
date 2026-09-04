@@ -32,19 +32,26 @@ import mutagen
 from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TYER, TCON, APIC, ID3NoHeaderError
 from mutagen.easyid3 import EasyID3
 
-def set_macos_finder_icon(file_path: str, image_data: bytes) -> bool:
-    """Set native macOS Finder file icon on the MP3 file using AppKit."""
-    if sys.platform != "darwin":
+try:
+    from mac_icon_helper import set_macos_finder_icon
+except ImportError:
+    _fallback_icon_lock = Lock()
+    def set_macos_finder_icon(file_path: str, image_data: bytes) -> bool:
+        """Fallback thread-safe macOS Finder file icon setter."""
+        if sys.platform != "darwin" or not file_path or not os.path.isfile(file_path):
+            return False
+        with _fallback_icon_lock:
+            try:
+                import objc
+                from AppKit import NSWorkspace, NSImage, NSData
+                with objc.autorelease_pool():
+                    nsdata = NSData.dataWithBytes_length_(image_data, len(image_data))
+                    img = NSImage.alloc().initWithData_(nsdata)
+                    if img and img.size().width > 0:
+                        return bool(NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, file_path, 0))
+            except Exception:
+                pass
         return False
-    try:
-        from AppKit import NSWorkspace, NSImage, NSData
-        nsdata = NSData.dataWithBytes_length_(image_data, len(image_data))
-        img = NSImage.alloc().initWithData_(nsdata)
-        if img:
-            return bool(NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, file_path, 0))
-    except Exception:
-        pass
-    return False
 
 DEFAULT_SONGS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
 DEFAULT_THREADS = 4
