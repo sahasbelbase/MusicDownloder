@@ -41,6 +41,10 @@ hiddenimports = [
     'requests',
     'certifi',
     'webview',
+    'app',
+    'download_playlist',
+    'discovery',
+    'fix_metadata',
 ]
 
 a = Analysis(

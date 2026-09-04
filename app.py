@@ -11,9 +11,11 @@ import time
 import json
 import asyncio
 import shutil
+import base64
 import urllib.request
 import urllib.parse
 import subprocess
+import uuid
 from threading import Thread, Lock
 from typing import Optional, List, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,6 +29,7 @@ from pydantic import BaseModel
 import mutagen
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TCON, APIC, ID3NoHeaderError
 from mutagen.mp3 import MP3
+import yt_dlp
 
 # Import extractor and download logic from download_playlist
 from download_playlist import (
@@ -36,7 +39,6 @@ from download_playlist import (
     download_single_track,
     find_ffmpeg,
     check_dependencies,
-    DEFAULT_PLAYLIST_URL,
     DEFAULT_OUTPUT_FOLDER,
 )
 import discovery
@@ -70,6 +72,39 @@ SONGS_DIR = DEFAULT_OUTPUT_FOLDER
 os.makedirs(SONGS_DIR, exist_ok=True)
 STATIC_DIR = get_resource_path("static")
 os.makedirs(STATIC_DIR, exist_ok=True)
+
+# User Data & Playlists Storage
+if getattr(sys, 'frozen', False):
+    USER_DATA_DIR = os.path.expanduser("~/Music/Music Studio/.musicstudio")
+else:
+    USER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+os.makedirs(USER_DATA_DIR, exist_ok=True)
+PLAYLISTS_FILE = os.path.join(USER_DATA_DIR, "playlists.json")
+PLAYLIST_COVERS_DIR = os.path.join(USER_DATA_DIR, "covers")
+os.makedirs(PLAYLIST_COVERS_DIR, exist_ok=True)
+playlists_lock = Lock()
+
+def load_playlists() -> List[Dict]:
+    with playlists_lock:
+        if not os.path.exists(PLAYLISTS_FILE):
+            return []
+        try:
+            with open(PLAYLISTS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for pl in data:
+                    pl["is_custom"] = (pl.get("type") == "custom")
+                return data
+        except Exception as e:
+            print(f"Error loading playlists: {e}")
+            return []
+
+def save_playlists(playlists: List[Dict]):
+    with playlists_lock:
+        try:
+            with open(PLAYLISTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(playlists, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving playlists: {e}")
 
 # Global Application State
 class AppState:
@@ -149,6 +184,40 @@ class EnrichRequest(BaseModel):
     threads: int = 4
     upgrade_artwork: bool = True
     force: bool = False
+
+# Playlist Management Models
+class CreatePlaylistRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    cover_url: Optional[str] = None
+
+class UpdatePlaylistRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    cover_url: Optional[str] = None
+
+class AddTrackToPlaylistRequest(BaseModel):
+    title: str
+    artist: str
+    album: Optional[str] = "Single"
+    cover_url: Optional[str] = ""
+    duration: Optional[int] = 0
+    query: Optional[str] = ""
+    preview_url: Optional[str] = ""
+
+class FavoritePlaylistRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    cover_url: Optional[str] = ""
+    external_id: Optional[str] = ""
+    tracks: Optional[List[Dict]] = []
+
+class CoverUploadPayload(BaseModel):
+    image_data: Optional[str] = None
+    image_url: Optional[str] = None
+
+class ImportPlaylistRequest(BaseModel):
+    url: str
 
 def enrich_tracks_for_download(tracks: List[Dict], threads: int = 4) -> Dict[tuple, Dict]:
     """Enrich track metadata before downloading. Returns cache of enriched data."""
@@ -646,6 +715,285 @@ def download_batch_tracks_route(req: BatchTracksDownloadRequest, background_task
     background_tasks.add_task(run_batch_songs_worker, req)
     return {"status": "started", "title": req.title, "count": len(req.tracks)}
 
+# ==================== PLAYLISTS API ====================
+@app.get("/api/playlists")
+def list_playlists_route():
+    return load_playlists()
+
+@app.post("/api/playlists")
+def create_playlist_route(req: CreatePlaylistRequest):
+    if not req.title or not req.title.strip():
+        raise HTTPException(status_code=400, detail="Playlist title cannot be empty")
+    
+    playlists = load_playlists()
+    now_ts = int(time.time())
+    new_id = f"pl_{now_ts}_{len(playlists)+1}"
+    
+    playlist = {
+        "id": new_id,
+        "title": req.title.strip(),
+        "description": (req.description or "").strip(),
+        "cover_url": req.cover_url or "/static/placeholder.svg",
+        "type": "custom",
+        "is_custom": True,
+        "track_count": 0,
+        "created_at": now_ts,
+        "updated_at": now_ts,
+        "tracks": []
+    }
+    playlists.insert(0, playlist)
+    save_playlists(playlists)
+    return playlist
+
+@app.get("/api/playlists/{playlist_id}")
+def get_playlist_route(playlist_id: str):
+    playlists = load_playlists()
+    for pl in playlists:
+        if pl.get("id") == playlist_id:
+            return pl
+    raise HTTPException(status_code=404, detail="Playlist not found")
+
+@app.put("/api/playlists/{playlist_id}")
+def update_playlist_route(playlist_id: str, req: UpdatePlaylistRequest):
+    playlists = load_playlists()
+    for pl in playlists:
+        if pl.get("id") == playlist_id:
+            if req.title is not None and req.title.strip():
+                pl["title"] = req.title.strip()
+            if req.description is not None:
+                pl["description"] = req.description.strip()
+            if req.cover_url is not None:
+                pl["cover_url"] = req.cover_url
+            pl["updated_at"] = int(time.time())
+            save_playlists(playlists)
+            return pl
+    raise HTTPException(status_code=404, detail="Playlist not found")
+
+@app.delete("/api/playlists/{playlist_id}")
+def delete_playlist_route(playlist_id: str):
+    playlists = load_playlists()
+    initial_len = len(playlists)
+    playlists = [pl for pl in playlists if pl.get("id") != playlist_id]
+    if len(playlists) == initial_len:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    save_playlists(playlists)
+    cover_path = os.path.join(PLAYLIST_COVERS_DIR, f"{playlist_id}.png")
+    if os.path.exists(cover_path):
+        try:
+            os.remove(cover_path)
+        except Exception:
+            pass
+    return {"status": "deleted", "id": playlist_id}
+
+@app.post("/api/playlists/{playlist_id}/tracks")
+def add_track_to_playlist_route(playlist_id: str, req: AddTrackToPlaylistRequest):
+    playlists = load_playlists()
+    for pl in playlists:
+        if pl.get("id") == playlist_id:
+            tracks = pl.setdefault("tracks", [])
+            for t in tracks:
+                if t.get("title") == req.title and t.get("artist") == req.artist:
+                    return {"status": "already_exists", "playlist": pl}
+            
+            new_track = {
+                "id": f"trk_{int(time.time()*1000)}",
+                "title": req.title,
+                "artist": req.artist,
+                "album": req.album or "Single",
+                "cover_url": req.cover_url or "/static/placeholder.svg",
+                "duration": req.duration or 0,
+                "query": req.query or f"{req.title} {req.artist}",
+                "preview_url": req.preview_url or "",
+                "added_at": int(time.time())
+            }
+            tracks.append(new_track)
+            pl["track_count"] = len(tracks)
+            if pl.get("cover_url") in [None, "", "/static/placeholder.svg"] and req.cover_url:
+                pl["cover_url"] = req.cover_url
+            pl["updated_at"] = int(time.time())
+            save_playlists(playlists)
+            return {"status": "added", "track": new_track, "playlist": pl}
+    raise HTTPException(status_code=404, detail="Playlist not found")
+
+@app.delete("/api/playlists/{playlist_id}/tracks/{track_index}")
+def remove_track_from_playlist_route(playlist_id: str, track_index: int):
+    playlists = load_playlists()
+    for pl in playlists:
+        if pl.get("id") == playlist_id:
+            tracks = pl.setdefault("tracks", [])
+            if 0 <= track_index < len(tracks):
+                removed = tracks.pop(track_index)
+                pl["track_count"] = len(tracks)
+                pl["updated_at"] = int(time.time())
+                save_playlists(playlists)
+                return {"status": "removed", "track": removed, "playlist": pl}
+            raise HTTPException(status_code=400, detail="Invalid track index")
+    raise HTTPException(status_code=404, detail="Playlist not found")
+
+@app.post("/api/playlists/favorite")
+def favorite_external_playlist_route(req: FavoritePlaylistRequest):
+    if not req.title:
+        raise HTTPException(status_code=400, detail="Playlist title is required")
+    playlists = load_playlists()
+    
+    # Check if already favorited
+    for pl in playlists:
+        if (req.external_id and pl.get("external_id") == req.external_id) or (pl.get("title") == req.title and pl.get("type") == "saved"):
+            return {"status": "already_favorited", "playlist": pl, "is_favorited": True}
+    
+    now_ts = int(time.time())
+    new_id = f"fav_{now_ts}_{len(playlists)+1}"
+    
+    formatted_tracks = []
+    for idx, t in enumerate(req.tracks or []):
+        formatted_tracks.append({
+            "id": t.get("id") or f"trk_{idx+1}",
+            "title": t.get("title") or "Unknown Title",
+            "artist": t.get("artist") or "Unknown Artist",
+            "album": t.get("album") or req.title,
+            "cover_url": t.get("cover_url") or req.cover_url or "/static/placeholder.svg",
+            "duration": t.get("duration") or 0,
+            "query": t.get("query") or f"{t.get('title')} {t.get('artist')}",
+            "preview_url": t.get("preview_url") or "",
+            "added_at": now_ts
+        })
+        
+    fav_playlist = {
+        "id": new_id,
+        "title": req.title.strip(),
+        "description": req.description or "Saved from Music Studio Discover",
+        "cover_url": req.cover_url or "/static/placeholder.svg",
+        "type": "saved",
+        "is_custom": False,
+        "external_id": req.external_id or "",
+        "track_count": len(formatted_tracks),
+        "created_at": now_ts,
+        "updated_at": now_ts,
+        "tracks": formatted_tracks
+    }
+    playlists.insert(0, fav_playlist)
+    save_playlists(playlists)
+    return {"status": "favorited", "playlist": fav_playlist, "is_favorited": True}
+
+@app.post("/api/playlists/{playlist_id}/cover")
+def upload_playlist_cover_route(playlist_id: str, payload: CoverUploadPayload):
+    playlists = load_playlists()
+    target_pl = None
+    for pl in playlists:
+        if pl.get("id") == playlist_id:
+            target_pl = pl
+            break
+    if not target_pl:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+        
+    if payload.image_url:
+        target_pl["cover_url"] = payload.image_url
+        target_pl["updated_at"] = int(time.time())
+        save_playlists(playlists)
+        return {"status": "updated", "cover_url": payload.image_url}
+        
+    if payload.image_data:
+        raw_data = payload.image_data
+        if "," in raw_data:
+            raw_data = raw_data.split(",", 1)[1]
+        try:
+            img_bytes = base64.b64decode(raw_data)
+            cover_path = os.path.join(PLAYLIST_COVERS_DIR, f"{playlist_id}.png")
+            with open(cover_path, "wb") as f:
+                f.write(img_bytes)
+            cover_url = f"/api/playlists/cover/{playlist_id}?t={int(time.time())}"
+            target_pl["cover_url"] = cover_url
+            target_pl["updated_at"] = int(time.time())
+            save_playlists(playlists)
+            return {"status": "updated", "cover_url": cover_url}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to process image: {e}")
+            
+    raise HTTPException(status_code=400, detail="No image data or URL provided")
+
+@app.get("/api/playlists/cover/{playlist_id}")
+def serve_playlist_cover_route(playlist_id: str):
+    cover_path = os.path.join(PLAYLIST_COVERS_DIR, f"{playlist_id}.png")
+    if os.path.isfile(cover_path):
+        return FileResponse(cover_path, media_type="image/png")
+    placeholder = os.path.join(STATIC_DIR, "placeholder.svg")
+    if os.path.isfile(placeholder):
+        return FileResponse(placeholder, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Cover not found")
+
+@app.post("/api/playlists/import")
+def import_playlist_route(req: ImportPlaylistRequest):
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Playlist URL is required")
+
+    collection_title = "Imported Playlist"
+    tracks = []
+    source = "custom"
+
+    try:
+        if SpotifyExtractor.is_spotify_url(url):
+            source = "spotify"
+            collection_title, tracks = SpotifyExtractor.extract_tracks(url)
+        elif "youtube.com" in url or "youtu.be" in url:
+            source = "youtube"
+            collection_title, tracks = YouTubeExtractor.extract_tracks(url)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported URL. Please enter a valid Spotify or YouTube Music playlist link.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to import playlist: {str(e)}")
+
+    if not tracks:
+        raise HTTPException(status_code=404, detail="No tracks found in the provided playlist URL.")
+
+    # Determine cover art from tracks or fallback
+    cover_url = tracks[0].get('cover_url', '') if tracks else '/static/placeholder.svg'
+
+    now_ts = int(time.time())
+    formatted_tracks = []
+    for idx, t in enumerate(tracks):
+        t_artist = t.get('artist') or "Unknown Artist"
+        t_title = t.get('title') or "Unknown Title"
+        formatted_tracks.append({
+            "id": f"trk_{idx+1}",
+            "title": t_title,
+            "artist": t_artist,
+            "album": t.get('album') or collection_title,
+            "cover_url": t.get('cover_url') or cover_url,
+            "duration": t.get('duration') or 0,
+            "query": t.get('query') or f"{t_title} {t_artist}",
+            "preview_url": t.get('preview_url') or "",
+            "added_at": now_ts
+        })
+
+    playlist_id = f"imported_{now_ts}_{uuid.uuid4().hex[:6]}"
+    new_playlist = {
+        "id": playlist_id,
+        "title": collection_title,
+        "description": f"Imported from {source.title()} • {len(formatted_tracks)} tracks",
+        "cover_url": cover_url,
+        "type": "custom",
+        "is_custom": True,
+        "is_imported": True,
+        "source": source,
+        "source_url": url,
+        "track_count": len(formatted_tracks),
+        "created_at": now_ts,
+        "updated_at": now_ts,
+        "tracks": formatted_tracks
+    }
+
+    playlists = load_playlists()
+    playlists.insert(0, new_playlist)
+    save_playlists(playlists)
+
+    return {
+        "status": "imported",
+        "success": True,
+        "playlist": new_playlist,
+        "message": f"Successfully imported \"{collection_title}\" with {len(formatted_tracks)} tracks!"
+    }
+
 @app.get("/api/songs")
 def list_songs(search: Optional[str] = None):
     songs = []
@@ -681,6 +1029,8 @@ def list_songs(search: Optional[str] = None):
                     title = raw['TIT2'].text[0]
                 if 'TPE1' in raw and raw['TPE1'].text:
                     artist = raw['TPE1'].text[0]
+                elif 'TPE2' in raw and raw['TPE2'].text:
+                    artist = raw['TPE2'].text[0]
                 if 'TALB' in raw and raw['TALB'].text:
                     album = raw['TALB'].text[0]
                 if 'TDRC' in raw and raw['TDRC'].text:
@@ -696,6 +1046,14 @@ def list_songs(search: Optional[str] = None):
                     collaborators = [c.strip() for c in parts.split(',')] if parts else []
             except Exception:
                 pass
+
+            if title in ["Unknown Title", ""]:
+                clean_art, clean_tit = clean_track_artist_and_title(f[:-4])
+                title = clean_tit or f[:-4]
+                if artist in ["Unknown Artist", ""] and clean_art and clean_art != "Unknown Artist":
+                    artist = clean_art
+            if album in ["Unknown Album", ""]:
+                album = title
 
             if search:
                 query = search.lower()
@@ -725,30 +1083,70 @@ def list_songs(search: Optional[str] = None):
     songs.sort(key=lambda x: x["mtime"], reverse=True)
     return songs
 
-@app.get("/api/songs/artwork/{filename}")
-def get_song_artwork(filename: str):
-    filepath = os.path.join(SONGS_DIR, filename)
-    if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
+@app.api_route("/api/songs/artwork/{filename:path}", methods=["GET", "HEAD"])
+def get_song_artwork(filename: str, request: Request):
+    candidates = [
+        filename,
+        urllib.parse.unquote(filename),
+        f"{filename}.mp3" if not filename.endswith(".mp3") else filename,
+        f"{urllib.parse.unquote(filename)}.mp3" if not filename.endswith(".mp3") else urllib.parse.unquote(filename)
+    ]
+    filepath = None
+    for cand in candidates:
+        fp = os.path.join(SONGS_DIR, cand)
+        if os.path.isfile(fp):
+            filepath = fp
+            break
 
-    try:
-        raw = ID3(filepath)
-        for k in raw.keys():
-            if k.startswith('APIC'):
-                frame = raw[k]
-                mime = frame.mime or "image/jpeg"
-                return StreamingResponse(iter([frame.data]), media_type=mime)
-    except Exception:
-        pass
+    if filepath and os.path.isfile(filepath):
+        try:
+            raw = ID3(filepath)
+            for k in raw.keys():
+                if k.startswith('APIC'):
+                    frame = raw[k]
+                    mime = frame.mime or "image/jpeg"
+                    data = frame.data
+                    if request.method == "HEAD":
+                        return Response(status_code=200, media_type=mime, headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Content-Length": str(len(data))
+                        })
+                    return Response(
+                        content=data,
+                        media_type=mime,
+                        headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Content-Length": str(len(data))
+                        }
+                    )
+        except Exception:
+            pass
 
     # Fallback to default SVG placeholder
     svg = """<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.5"><rect width="100%" height="100%" fill="#18181b"/><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v9"/></svg>"""
-    return StreamingResponse(iter([svg.encode('utf-8')]), media_type="image/svg+xml")
+    svg_bytes = svg.encode('utf-8')
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="image/svg+xml", headers={"Content-Length": str(len(svg_bytes))})
+    return Response(content=svg_bytes, media_type="image/svg+xml", headers={
+        "Cache-Control": "public, max-age=86400",
+        "Content-Length": str(len(svg_bytes))
+    })
 
-@app.api_route("/api/songs/audio/{filename}", methods=["GET", "HEAD"])
+@app.api_route("/api/songs/audio/{filename:path}", methods=["GET", "HEAD"])
 def stream_audio(filename: str, request: Request):
-    filepath = os.path.join(SONGS_DIR, filename)
-    if not os.path.isfile(filepath):
+    candidates = [
+        filename,
+        urllib.parse.unquote(filename),
+        f"{filename}.mp3" if not filename.endswith(".mp3") else filename,
+        f"{urllib.parse.unquote(filename)}.mp3" if not filename.endswith(".mp3") else urllib.parse.unquote(filename)
+    ]
+    filepath = None
+    for cand in candidates:
+        fp = os.path.join(SONGS_DIR, cand)
+        if os.path.isfile(fp):
+            filepath = fp
+            break
+    if not filepath or not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Song not found")
 
     stat = os.stat(filepath)
@@ -816,6 +1214,146 @@ def stream_audio(filename: str, request: Request):
         )
     except Exception:
         return FileResponse(filepath, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
+
+# ==================== ON-THE-FLY STREAMING ENGINE ====================
+STREAM_CACHE: Dict[str, dict] = {}
+STREAM_CACHE_LOCK = Lock()
+
+def resolve_stream_url(query: str) -> dict:
+    """Resolve direct audio streaming URL using yt-dlp with caching."""
+    cache_key = query.strip().lower()
+    now = time.time()
+    with STREAM_CACHE_LOCK:
+        if cache_key in STREAM_CACHE:
+            item = STREAM_CACHE[cache_key]
+            if now - item.get("timestamp", 0) < 7200:
+                return item
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'quiet': True,
+        'noplaylist': True,
+        'no_warnings': True,
+    }
+    ffmpeg_loc = find_ffmpeg()
+    if ffmpeg_loc:
+        ydl_opts['ffmpeg_location'] = ffmpeg_loc
+
+    search_query = query if query.startswith("http") else f"ytsearch1:{query}"
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        extracted = ydl.extract_info(search_query, download=False)
+        entry = extracted['entries'][0] if 'entries' in extracted else extracted
+        stream_url = entry.get('url')
+        duration = entry.get('duration') or 0
+        title = entry.get('title') or query
+
+    if not stream_url:
+        raise ValueError("No audio stream available")
+
+    content_type = "audio/webm"
+    total_size = 0
+    try:
+        req = urllib.request.Request(stream_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=4) as probe:
+            content_type = probe.headers.get('Content-Type', 'audio/webm')
+            total_size = int(probe.headers.get('Content-Length', 0))
+    except Exception:
+        pass
+
+    res = {
+        'url': stream_url,
+        'content_type': content_type,
+        'total_size': total_size,
+        'duration': duration,
+        'title': title,
+        'timestamp': now
+    }
+    with STREAM_CACHE_LOCK:
+        STREAM_CACHE[cache_key] = res
+    return res
+
+@app.get("/api/stream/info")
+def get_stream_info(q: str):
+    """Returns streaming metadata without transferring full audio stream."""
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
+    try:
+        info = resolve_stream_url(q)
+        return {
+            "title": info.get("title"),
+            "duration": info.get("duration"),
+            "content_type": info.get("content_type"),
+            "stream_url": f"/api/stream?q={urllib.parse.quote(q)}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.api_route("/api/stream", methods=["GET", "HEAD"])
+def stream_audio_live(q: str, request: Request):
+    """
+    Streams audio on-the-fly for any track with full HTTP Range request support
+    for scrubbing, seeking, and immediate playback without downloading.
+    """
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
+
+    # If already downloaded locally in SONGS_DIR, stream local file directly!
+    clean_q = re.sub(r'[\/\\:\*\?"<>\|]', '', q).lower()
+    if os.path.isdir(SONGS_DIR):
+        for f in os.listdir(SONGS_DIR):
+            if f.lower().endswith('.mp3'):
+                f_clean = re.sub(r'[\/\\:\*\?"<>\|]', '', f[:-4]).lower()
+                if clean_q == f_clean or (len(clean_q) > 4 and clean_q in f_clean):
+                    return stream_audio(f, request)
+
+    try:
+        stream_info = resolve_stream_url(q)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Streaming error: {str(e)}")
+
+    stream_url = stream_info['url']
+    content_type = stream_info.get('content_type', 'audio/webm')
+
+    req_headers = {'User-Agent': 'Mozilla/5.0'}
+    range_header = request.headers.get("range")
+    if range_header:
+        req_headers['Range'] = range_header
+
+    try:
+        req = urllib.request.Request(stream_url, headers=req_headers)
+        upstream = urllib.request.urlopen(req, timeout=10)
+        status_code = upstream.status
+
+        resp_headers = {
+            'Content-Type': upstream.headers.get('Content-Type', content_type),
+            'Accept-Ranges': 'bytes',
+        }
+        if 'Content-Range' in upstream.headers:
+            resp_headers['Content-Range'] = upstream.headers['Content-Range']
+        if 'Content-Length' in upstream.headers:
+            resp_headers['Content-Length'] = upstream.headers['Content-Length']
+
+        if request.method == "HEAD":
+            upstream.close()
+            return Response(status_code=status_code, headers=resp_headers)
+
+        def iter_stream():
+            try:
+                while True:
+                    chunk = upstream.read(64 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                upstream.close()
+
+        return StreamingResponse(
+            iter_stream(),
+            status_code=status_code,
+            headers=resp_headers
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upstream stream error: {str(e)}")
 
 @app.post("/api/open-folder")
 def open_songs_folder():

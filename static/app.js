@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSearchFilter = 'all';
   let currentSearchResults = { tracks: [], albums: [] };
 
-  // Playlist Modal Elements
+  // Playlist Modal & Custom Playlist Elements
   const playlistModal = document.getElementById('playlist-modal');
   const playlistModalBackdrop = document.getElementById('playlist-modal-backdrop');
   const modalCloseBtn = document.getElementById('modal-close-btn');
@@ -138,19 +138,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalSubtitle = document.getElementById('modal-subtitle');
   const modalTrackCount = document.getElementById('modal-track-count');
   const btnModalDownloadAll = document.getElementById('btn-modal-download-all');
+  const btnModalFavorite = document.getElementById('btn-modal-favorite');
+  const modalFavText = document.getElementById('modal-fav-text');
   const modalTracklist = document.getElementById('modal-tracklist');
   let currentModalPlaylist = null;
   let exploreSearchDebounce = null;
 
+  // Custom Playlist Creator Elements
+  const btnCreatePlaylist = document.getElementById('btn-create-playlist');
+  const createPlaylistModal = document.getElementById('create-playlist-modal');
+  const createPlaylistBackdrop = document.getElementById('create-playlist-backdrop');
+  const createPlaylistClose = document.getElementById('create-playlist-close');
+  const btnCancelPlaylist = document.getElementById('btn-cancel-playlist');
+  const createPlaylistForm = document.getElementById('create-playlist-form');
+  const coverPreviewBox = document.getElementById('cover-preview-box');
+  const coverPreviewImg = document.getElementById('cover-preview-img');
+  const playlistFileInput = document.getElementById('playlist-file-input');
+  const playlistNameInput = document.getElementById('playlist-name-input');
+  const playlistDescInput = document.getElementById('playlist-desc-input');
+  const playlistUrlInput = document.getElementById('playlist-url-input');
+
+  // Add to Playlist Modal Elements
+  const addToPlaylistModal = document.getElementById('add-to-playlist-modal');
+  const addToPlaylistBackdrop = document.getElementById('add-to-playlist-backdrop');
+  const addToPlaylistClose = document.getElementById('add-to-playlist-close');
+  const addToPlaylistTrackName = document.getElementById('add-to-playlist-track-name');
+  const addToPlaylistList = document.getElementById('add-to-playlist-list');
+  const btnQuickCreateFromAdd = document.getElementById('btn-quick-create-from-add');
+  const drawerAddPlaylistBtn = document.getElementById('drawer-add-playlist-btn');
+
   // Application State
   let rawLibrarySongs = [];
   let librarySongs = [];
+  let userPlaylists = [];
+  let pendingCoverBase64 = null;
+  let trackToAdd = null;
+  let playlistSubFilter = 'all'; // 'all' | 'custom' | 'favorites'
   let currentSongIndex = -1;
   let isPlaying = false;
   let isSeeking = false;
   let isShuffle = (localStorage.getItem('musicstudio_shuffle') || localStorage.getItem('spotistudio_shuffle')) === 'true';
   let repeatMode = localStorage.getItem('musicstudio_repeat') || localStorage.getItem('spotistudio_repeat') || 'off'; // 'off' | 'all' | 'one'
-  let currentGroupMode = 'tracks'; // 'tracks' | 'artists' | 'albums' | 'genres'
+  let currentGroupMode = 'tracks'; // 'tracks' | 'artists' | 'albums' | 'genres' | 'playlists'
   let currentSortMode = 'recent'; // 'recent' | 'title' | 'artist' | 'duration'
   let shuffleQueue = [];
   let shufflePointer = 0;
@@ -446,6 +475,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function loadUserPlaylists() {
+    try {
+      const res = await fetch('/api/playlists');
+      if (res.ok) {
+        userPlaylists = await res.json();
+        if (currentGroupMode === 'playlists') {
+          renderLibrary();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load user playlists', e);
+    }
+  }
+
   function applySortAndFilter() {
     let list = [...rawLibrarySongs];
     const q = (librarySearch.value || '').trim().toLowerCase();
@@ -469,6 +512,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     librarySongs = list;
+
+    if (currentGroupMode === 'playlists') {
+      renderLibrary();
+      return;
+    }
+
     libraryCountLabel.textContent = `${librarySongs.length} track${librarySongs.length === 1 ? '' : 's'}`;
     generateShuffleQueue(currentSongIndex >= 0 ? currentSongIndex : -1);
     renderLibrary();
@@ -476,6 +525,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderLibrary() {
     libraryContainer.innerHTML = '';
+
+    if (currentGroupMode === 'playlists') {
+      if (viewSwitchWrap) viewSwitchWrap.style.display = 'none';
+      libraryContainer.classList.add('grid-mode');
+      libraryContainer.classList.remove('list-mode');
+      renderPlaylistsGroupView();
+      return;
+    }
 
     if (librarySongs.length === 0) {
       libraryContainer.innerHTML = `
@@ -681,6 +738,137 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function renderPlaylistsGroupView() {
+    libraryContainer.innerHTML = '';
+
+    const isCustomPl = (p) => Boolean(p.is_custom) || p.type === 'custom';
+    const customCount = userPlaylists.filter(isCustomPl).length;
+    const favCount = userPlaylists.filter(p => !isCustomPl(p)).length;
+
+    // Sub-filters bar
+    const filterBar = document.createElement('div');
+    filterBar.className = 'playlist-filter-bar';
+    filterBar.innerHTML = `
+      <button class="playlist-filter-pill ${playlistSubFilter === 'all' ? 'active' : ''}" data-sub="all">All Playlists (${userPlaylists.length})</button>
+      <button class="playlist-filter-pill ${playlistSubFilter === 'custom' ? 'active' : ''}" data-sub="custom">Custom (${customCount})</button>
+      <button class="playlist-filter-pill ${playlistSubFilter === 'favorites' ? 'active' : ''}" data-sub="favorites">Saved (${favCount})</button>
+    `;
+
+    filterBar.querySelectorAll('.playlist-filter-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        playlistSubFilter = btn.dataset.sub;
+        renderPlaylistsGroupView();
+      });
+    });
+
+    libraryContainer.appendChild(filterBar);
+
+    let filtered = [...userPlaylists];
+    if (playlistSubFilter === 'custom') {
+      filtered = filtered.filter(isCustomPl);
+    } else if (playlistSubFilter === 'favorites') {
+      filtered = filtered.filter(p => !isCustomPl(p));
+    }
+
+    const q = (librarySearch.value || '').trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter(p =>
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    libraryCountLabel.textContent = `${filtered.length} playlist${filtered.length === 1 ? '' : 's'}`;
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state glass';
+      empty.style.cssText = 'grid-column: 1 / -1; width: 100%; padding: 48px 20px;';
+      empty.innerHTML = `
+        <div class="empty-icon-wrap">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8">
+            <line x1="8" y1="6" x2="21" y2="6"/>
+            <line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/>
+            <circle cx="4" cy="6" r="1.5" fill="currentColor"/>
+            <circle cx="4" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="4" cy="18" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <p style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-top: 10px;">No playlists found</p>
+        <span style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">Create your personal custom playlist or save curated playlists from Discover</span>
+        <button class="btn-primary" id="btn-empty-create-pl" style="margin-top: 16px;">+ Create New Playlist</button>
+      `;
+      const btn = empty.querySelector('#btn-empty-create-pl');
+      if (btn) btn.addEventListener('click', openCreatePlaylistModal);
+      libraryContainer.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(playlist => {
+      const card = document.createElement('div');
+      card.className = 'playlist-card';
+      const trackCount = playlist.track_count || (playlist.tracks ? playlist.tracks.length : 0);
+      const isCustom = isCustomPl(playlist);
+      const badgeClass = isCustom ? 'playlist-badge-custom' : 'playlist-badge-saved';
+      const badgeText = isCustom ? 'Custom' : 'Saved';
+      const coverSrc = playlist.cover_url || '/static/placeholder.svg';
+
+      card.innerHTML = `
+        <div class="playlist-card-art-wrap">
+          <img class="playlist-card-art" src="${coverSrc}" onerror="this.src='/static/placeholder.svg'" alt="${escapeHtml(playlist.title)}" loading="lazy" />
+          <span class="playlist-card-badge ${badgeClass}">${badgeText}</span>
+          <button class="playlist-card-delete-btn" title="Delete Playlist">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+          <div class="playlist-card-overlay">
+            <div class="playlist-card-open-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Open Collection</span>
+            </div>
+          </div>
+        </div>
+        <div class="playlist-card-info">
+          <div class="playlist-card-title truncate" title="${escapeHtml(playlist.title)}">${escapeHtml(playlist.title)}</div>
+          <div class="playlist-card-subtitle truncate">${escapeHtml(playlist.description || (playlist.is_custom ? 'Personal Studio Playlist' : 'Saved Collection'))} • ${trackCount} track${trackCount === 1 ? '' : 's'}</div>
+        </div>
+      `;
+
+      card.querySelector('.playlist-card-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete playlist "${playlist.title}"?`)) {
+          deleteUserPlaylist(playlist.id);
+        }
+      });
+
+      card.addEventListener('click', () => {
+        openPlaylistModal(playlist.id, false, playlist);
+      });
+
+      libraryContainer.appendChild(card);
+    });
+  }
+
+  async function deleteUserPlaylist(playlistId) {
+    try {
+      const res = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to delete playlist');
+      }
+      showToast('Playlist deleted successfully', 'info');
+      await loadUserPlaylists();
+      renderLibrary();
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  }
+
   // View switchers
   viewGridBtn.addEventListener('click', () => {
     viewGridBtn.classList.add('active');
@@ -731,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnRefreshLibrary.addEventListener('click', () => {
     loadLibrary(librarySearch.value.trim());
+    loadUserPlaylists();
     showToast('Library refreshed');
   });
 
@@ -836,31 +1025,137 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  let trendingTracksQueue = [];
+  let currentStreamingTrack = null;
+  let isOnlineStreaming = false;
+  let currentOnlineQueue = [];
+  let currentOnlineQueueIndex = -1;
+
+  function normalizeSongString(str) {
+    return (str || '')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function findLocalLibraryMatch(track) {
+    if (!rawLibrarySongs || !rawLibrarySongs.length || !track) return null;
+    const tTitle = normalizeSongString(track.title);
+    const tArtist = normalizeSongString(track.artist);
+    if (!tTitle) return null;
+
+    // 1. Exact match on title and artist
+    for (const song of rawLibrarySongs) {
+      const sTitle = normalizeSongString(song.title);
+      const sArtist = normalizeSongString(song.artist);
+      if (sTitle === tTitle && (!tArtist || !sArtist || sArtist.includes(tArtist) || tArtist.includes(sArtist))) {
+        return song;
+      }
+    }
+
+    // 2. Loose match: title contains or filename contains
+    for (const song of rawLibrarySongs) {
+      const sTitle = normalizeSongString(song.title);
+      const sFile = normalizeSongString(song.filename);
+      if (sTitle && tTitle && (sTitle.includes(tTitle) || tTitle.includes(sTitle))) {
+        return song;
+      }
+      if (sFile && tTitle && sFile.includes(tTitle)) {
+        return song;
+      }
+    }
+    return null;
+  }
+
+  function updateStreamingDownloadUI(isSaved, isDownloading) {
+    const dockQuickDl = document.getElementById('dock-quick-dl-btn');
+    const dockDlText = document.querySelector('.dock-dl-label');
+    const fsSaveBtn = document.getElementById('fs-save-btn');
+    const fsSaveText = document.getElementById('fs-save-text');
+
+    if (isSaved) {
+      if (dockQuickDl) {
+        dockQuickDl.classList.add('saved');
+        dockQuickDl.classList.remove('downloading');
+        dockQuickDl.title = 'Saved in Library';
+      }
+      if (dockDlText) dockDlText.textContent = 'Saved';
+      if (fsSaveBtn) {
+        fsSaveBtn.classList.add('saved');
+        fsSaveBtn.classList.remove('downloading');
+        fsSaveBtn.disabled = true;
+      }
+      if (fsSaveText) fsSaveText.textContent = '✓ Saved in Library';
+    } else if (isDownloading) {
+      if (dockQuickDl) {
+        dockQuickDl.classList.add('downloading');
+        dockQuickDl.classList.remove('saved');
+        dockQuickDl.title = 'Saving to Library...';
+      }
+      if (dockDlText) dockDlText.textContent = 'Saving...';
+      if (fsSaveBtn) {
+        fsSaveBtn.classList.add('downloading');
+        fsSaveBtn.classList.remove('saved');
+        fsSaveBtn.disabled = true;
+      }
+      if (fsSaveText) fsSaveText.textContent = 'Saving to Library (320k)...';
+    } else {
+      if (dockQuickDl) {
+        dockQuickDl.classList.remove('saved', 'downloading');
+        dockQuickDl.disabled = false;
+        dockQuickDl.title = 'Save to Library (320 kbps MP3)';
+      }
+      if (dockDlText) dockDlText.textContent = 'Save';
+      if (fsSaveBtn) {
+        fsSaveBtn.classList.remove('saved', 'downloading');
+        fsSaveBtn.disabled = false;
+        fsSaveBtn.title = 'Save to Library (320 kbps Master)';
+      }
+      if (fsSaveText) fsSaveText.textContent = 'Save to Library (320 kbps)';
+    }
+  }
+
+  async function saveCurrentStreamingTrack() {
+    if (!currentStreamingTrack) return;
+    const track = currentStreamingTrack;
+    updateStreamingDownloadUI(false, true);
+
+    try {
+      await downloadSingleTrack(track);
+      updateStreamingDownloadUI(true, false);
+      showToast(`✓ Saved "${track.title}" to library!`, 'success');
+    } catch (e) {
+      updateStreamingDownloadUI(false, false);
+      showToast(e.message || 'Download failed', 'error');
+    }
+  }
+
   function renderTrendingTracks(tracks) {
     if (!trendingTracksGrid) return;
     trendingTracksGrid.innerHTML = '';
+    trendingTracksQueue = tracks || [];
 
-    tracks.forEach(track => {
-      const card = createExploreTrackCard(track);
+    tracks.forEach((track, idx) => {
+      const card = createExploreTrackCard(track, trendingTracksQueue, idx);
       trendingTracksGrid.appendChild(card);
     });
   }
 
-  function createExploreTrackCard(track) {
+  function createExploreTrackCard(track, queue = [], idx = -1) {
     const card = document.createElement('div');
     card.className = 'explore-song-card';
 
     const durationText = (track.duration && track.duration > 0) ? formatSeconds(track.duration) : '3:30';
     const coverUrl = track.cover_url || '/static/placeholder.svg';
+    const isSaved = !!findLocalLibraryMatch(track);
 
     card.innerHTML = `
       <div class="explore-song-thumb-wrap">
         <img class="explore-song-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
-        ${track.preview_url ? `
-          <div class="explore-song-preview-overlay" title="Preview 30s Snippet">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </div>
-        ` : ''}
+        <div class="explore-song-preview-overlay" title="Play Full Track Online (Stream)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
       </div>
       <div class="explore-song-info">
         <div class="explore-song-title truncate" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
@@ -868,68 +1163,129 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="explore-song-meta">${durationText} • Studio Master</div>
       </div>
       <div class="explore-song-actions">
-        <button class="btn-quick-download" title="1-Click Download">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>Get</span>
+        <button class="btn-quick-download ${isSaved ? 'downloaded' : ''}" title="${isSaved ? 'In Library' : 'Save to Library (320 kbps)'}">
+          ${isSaved ? `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Added</span>
+          ` : `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Get</span>
+          `}
         </button>
       </div>
     `;
 
-    // Preview snippet audio play
-    const previewBtn = card.querySelector('.explore-song-preview-overlay');
-    if (previewBtn && track.preview_url) {
-      previewBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        previewTrackAudio(track);
-      });
-    }
+    // Clicking play overlay or song info plays full track online without downloading!
+    const playHandler = (e) => {
+      e.stopPropagation();
+      playOnlineTrack(track, queue, idx);
+    };
 
-    // 1-click Download
+    const previewBtn = card.querySelector('.explore-song-preview-overlay');
+    if (previewBtn) previewBtn.addEventListener('click', playHandler);
+    const infoSection = card.querySelector('.explore-song-info');
+    if (infoSection) infoSection.addEventListener('click', playHandler);
+
+    // 1-click Download / Save
     const downloadBtn = card.querySelector('.btn-quick-download');
     downloadBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (downloadBtn.classList.contains('downloaded')) {
+        showToast(`"${track.title}" is already in your library`, 'info');
+        return;
+      }
       downloadSingleTrack(track, downloadBtn);
     });
 
     return card;
   }
 
-  function previewTrackAudio(track) {
-    if (!track.preview_url) return;
-    currentSongIndex = -1;
-    audioEngine.src = track.preview_url;
-    audioEngine.play().catch(() => {});
-    
-    playerTitle.textContent = `${track.title} (Preview)`;
-    playerArtist.textContent = track.artist;
-    playerCover.src = track.cover_url || '/static/placeholder.svg';
+  function playOnlineTrack(track, queue = [], index = -1) {
+    if (!track) return;
 
+    // Check if song already exists locally in user's library
+    const localMatch = findLocalLibraryMatch(track);
+    if (localMatch) {
+      const localIdx = librarySongs.findIndex(s => s.filename === localMatch.filename);
+      if (localIdx >= 0) {
+        showToast(`Playing local library file: ${localMatch.title}`, 'info');
+        playTrack(localIdx);
+        return;
+      }
+    }
+
+    isOnlineStreaming = true;
+    currentSongIndex = -1;
+    currentStreamingTrack = track;
+
+    if (queue && queue.length) {
+      currentOnlineQueue = queue;
+      currentOnlineQueueIndex = index >= 0 ? index : queue.findIndex(t => t.title === track.title && t.artist === track.artist);
+    } else {
+      currentOnlineQueue = [track];
+      currentOnlineQueueIndex = 0;
+    }
+
+    const query = track.query || `${track.title} ${track.artist}`;
+    const streamEndpoint = `/api/stream?q=${encodeURIComponent(query)}`;
+    const coverUrl = track.cover_url || '/static/placeholder.svg';
+    const totalSec = (track.duration && track.duration > 0) ? track.duration : 0;
+
+    audioEngine.src = streamEndpoint;
+    audioEngine.load();
+    const playPromise = audioEngine.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        updatePlayIcon(false);
+      });
+    }
+
+    // Update Dock
+    playerCover.src = coverUrl;
+    playerTitle.textContent = track.title || 'Unknown Track';
+    playerArtist.textContent = track.artist || 'Online Stream';
     playerScrubber.value = 0;
     updateScrubberFill(0);
     playerCurrentTime.textContent = '0:00';
-    const totalSec = (track.duration && track.duration > 0) ? track.duration : 30;
-    playerTotalTime.textContent = formatSeconds(totalSec);
+    playerTotalTime.textContent = totalSec ? formatSeconds(totalSec) : '--:--';
+
+    const dockStreamBadge = document.getElementById('dock-stream-badge');
+    if (dockStreamBadge) dockStreamBadge.style.display = 'inline-block';
+    const dockQuickDl = document.getElementById('dock-quick-dl-btn');
+    if (dockQuickDl) {
+      dockQuickDl.style.display = 'inline-flex';
+      updateStreamingDownloadUI(false, false);
+    }
 
     // Synchronize to Fullscreen "Now Playing" Overlay
-    if (fsCover) fsCover.src = track.cover_url || '/static/placeholder.svg';
-    if (fsTitle) fsTitle.textContent = `${track.title} (Preview)`;
-    if (fsArtist) fsArtist.textContent = track.artist;
-    if (fsAlbum) fsAlbum.textContent = track.album || 'Music Studio Preview';
+    if (fsCover) fsCover.src = coverUrl;
+    if (fsTitle) fsTitle.textContent = track.title || 'Unknown Track';
+    if (fsArtist) fsArtist.textContent = track.artist || 'Online Stream';
+    if (fsAlbum) fsAlbum.textContent = track.album || 'Online Stream Master';
     if (fsScrubber) {
       fsScrubber.value = 0;
       updateFsScrubberFill(0);
     }
     if (fsCurrentTime) fsCurrentTime.textContent = '0:00';
-    if (fsTotalTime) fsTotalTime.textContent = formatSeconds(totalSec);
+    if (fsTotalTime) fsTotalTime.textContent = totalSec ? formatSeconds(totalSec) : '--:--';
+
+    const fsStreamActions = document.getElementById('fs-stream-actions');
+    if (fsStreamActions) fsStreamActions.style.display = 'flex';
+    const fsStreamBadge = document.getElementById('fs-stream-badge-floating');
+    if (fsStreamBadge) fsStreamBadge.style.display = 'inline-flex';
 
     isPlaying = true;
     updatePlayIcon(true);
     highlightPlayingRow();
-    showToast(`Playing 30s preview: ${track.title}`, 'info');
+    showToast(`Streaming live: ${track.title} - ${track.artist}`, 'info');
+  }
+
+  function previewTrackAudio(track) {
+    playOnlineTrack(track);
   }
 
   async function downloadSingleTrack(track, btnEl) {
@@ -947,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
           artist: track.artist,
           album: track.album || 'Single',
           cover_url: track.cover_url,
-          query: track.query,
+          query: track.query || `${track.title} ${track.artist}`,
           quality: settingQuality ? settingQuality.value : '320k',
           naming: settingNaming ? settingNaming.value : 'title'
         })
@@ -1171,54 +1527,130 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==================== PLAYLIST & ALBUM PREVIEW MODAL ====================
-  async function openPlaylistModal(playlistId) {
+  async function openPlaylistModal(playlistId, isAlbumParam = false, existingData = null) {
     if (!playlistModal) return;
     playlistModal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    const isAlbum = String(playlistId).startsWith('album_') || String(playlistId).startsWith('album-');
-    if (modalBadge) modalBadge.textContent = isAlbum ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION';
-    modalTitle.textContent = isAlbum ? 'Loading album...' : 'Loading playlist...';
-    modalSubtitle.textContent = 'Fetching tracklist and studio metadata...';
-    modalTrackCount.textContent = '...';
-    modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);"><span class="pulse-dot"></span> Loading tracks...</div>`;
+    let data = existingData || null;
 
-    try {
-      const res = await fetch(`/api/explore/playlist/${encodeURIComponent(playlistId)}`);
-      if (!res.ok) throw new Error('Failed to load collection');
-      const data = await res.json();
-      currentModalPlaylist = data;
+    if (!data) {
+      const isAlbum = isAlbumParam || String(playlistId).startsWith('album_') || String(playlistId).startsWith('album-');
+      if (modalBadge) modalBadge.textContent = isAlbum ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION';
+      modalTitle.textContent = isAlbum ? 'Loading album...' : 'Loading playlist...';
+      modalSubtitle.textContent = 'Fetching tracklist and studio metadata...';
+      modalTrackCount.textContent = '...';
+      modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);"><span class="pulse-dot"></span> Loading tracks...</div>`;
 
-      const isAlbType = (data.type === 'album' || isAlbum);
-      modalTitle.textContent = data.title;
-      modalSubtitle.textContent = data.subtitle || (isAlbType ? `${data.artist || 'Artist'} • Album Master` : 'Curated Studio Collection');
-      modalCover.src = data.cover_url || '/static/placeholder.svg';
-      const count = data.track_count || (data.tracks ? data.tracks.length : 0);
-      modalTrackCount.textContent = `${count} tracks`;
-
-      if (modalBadge) modalBadge.textContent = isAlbType ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION';
-
-      if (btnModalDownloadAll) {
-        btnModalDownloadAll.innerHTML = `
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>${isAlbType ? `Download Entire Album (${count} Songs)` : 'Download Entire Playlist'}</span>
-        `;
+      try {
+        let res = await fetch(`/api/explore/playlist/${encodeURIComponent(playlistId)}`);
+        if (!res.ok) {
+          res = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}`);
+        }
+        if (!res.ok) throw new Error('Failed to load collection');
+        data = await res.json();
+      } catch (e) {
+        modalTitle.textContent = 'Error Loading Collection';
+        modalSubtitle.textContent = e.message;
+        modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);">${e.message}</div>`;
+        return;
       }
+    }
 
-      renderModalTracklist(data.tracks || []);
+    currentModalPlaylist = data;
+    const isCustom = Boolean(data.is_custom) || data.type === 'custom';
+    const isAlbType = (data.type === 'album' || isAlbumParam || String(data.id || '').startsWith('album_'));
+
+    modalTitle.textContent = data.title;
+    modalSubtitle.textContent = data.subtitle || data.description || (isCustom ? 'Personal Custom Playlist' : (isAlbType ? `${data.artist || 'Artist'} • Album Master` : 'Curated Studio Collection'));
+    modalCover.src = data.cover_url || '/static/placeholder.svg';
+    const count = (data.tracks ? data.tracks.length : (data.track_count || 0));
+    modalTrackCount.textContent = `${count} track${count === 1 ? '' : 's'}`;
+
+    if (modalBadge) {
+      modalBadge.textContent = isCustom ? 'CUSTOM PLAYLIST' : (isAlbType ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION');
+    }
+
+    // Check favorite state
+    updateModalFavoriteBtnState();
+
+    if (btnModalDownloadAll) {
+      btnModalDownloadAll.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span>${isAlbType ? `Download Entire Album (${count} Songs)` : 'Download Entire Playlist'}</span>
+      `;
 
       btnModalDownloadAll.onclick = () => {
         downloadEntirePlaylist(data);
       };
-    } catch (e) {
-      modalTitle.textContent = 'Error Loading Collection';
-      modalSubtitle.textContent = e.message;
-      modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);">${e.message}</div>`;
     }
+
+    renderModalTracklist(data.tracks || []);
+  }
+
+  function updateModalFavoriteBtnState() {
+    if (!btnModalFavorite) return;
+    if (!currentModalPlaylist) {
+      btnModalFavorite.style.display = 'none';
+      return;
+    }
+    if (Boolean(currentModalPlaylist.is_custom) || currentModalPlaylist.type === 'custom') {
+      btnModalFavorite.style.display = 'none';
+      return;
+    }
+    btnModalFavorite.style.display = 'inline-flex';
+    const isFav = userPlaylists.some(p => p.id === currentModalPlaylist.id || (!p.is_custom && p.title === currentModalPlaylist.title));
+    if (isFav) {
+      btnModalFavorite.classList.add('favorited');
+      if (modalFavText) modalFavText.textContent = 'Favorited ♥';
+    } else {
+      btnModalFavorite.classList.remove('favorited');
+      if (modalFavText) modalFavText.textContent = 'Save Playlist';
+    }
+  }
+
+  if (btnModalFavorite) {
+    btnModalFavorite.addEventListener('click', async () => {
+      if (!currentModalPlaylist) return;
+      const alreadyFav = userPlaylists.some(p => p.id === currentModalPlaylist.id || (!p.is_custom && p.title === currentModalPlaylist.title));
+      if (alreadyFav) {
+        showToast(`"${currentModalPlaylist.title}" is already saved in your Library!`, 'info');
+        return;
+      }
+
+      try {
+        btnModalFavorite.disabled = true;
+        const res = await fetch('/api/playlists/favorite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentModalPlaylist.id,
+            title: currentModalPlaylist.title,
+            description: currentModalPlaylist.subtitle || currentModalPlaylist.description || '',
+            cover_url: currentModalPlaylist.cover_url || '',
+            tracks: currentModalPlaylist.tracks || []
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to save playlist');
+        }
+
+        showToast(`Saved "${currentModalPlaylist.title}" to your Playlists!`, 'success');
+        btnModalFavorite.classList.add('favorited');
+        if (modalFavText) modalFavText.textContent = 'Favorited ♥';
+        await loadUserPlaylists();
+      } catch (e) {
+        showToast(e.message, 'error');
+      } finally {
+        btnModalFavorite.disabled = false;
+      }
+    });
   }
 
   function closePlaylistModal() {
@@ -1236,6 +1668,8 @@ document.addEventListener('DOMContentLoaded', () => {
       modalTracklist.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--text-tertiary);">No tracks found in this collection.</div>`;
       return;
     }
+
+    const isCustom = currentModalPlaylist && (Boolean(currentModalPlaylist.is_custom) || currentModalPlaylist.type === 'custom');
 
     tracks.forEach((track, idx) => {
       const row = document.createElement('div');
@@ -1255,11 +1689,23 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="row-album truncate" title="${escapeHtml(track.album || '')}">${escapeHtml(track.album || '—')}</div>
         <div class="row-time">${durationText}</div>
         <div class="row-actions">
-          ${track.preview_url ? `
-            <button class="btn-row-preview" title="Preview Audio">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </button>
-          ` : ''}
+          <button class="btn-row-preview" title="Play Track">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <button class="btn-row-add-pl" title="Add to Playlist">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          ${isCustom ? `
+          <button class="btn-row-remove-pl" title="Remove from Playlist">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+          ` : `
           <button class="btn-row-download" title="Download This Track">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -1267,6 +1713,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
           </button>
+          `}
         </div>
       `;
 
@@ -1274,17 +1721,315 @@ document.addEventListener('DOMContentLoaded', () => {
       const prevBtn = row.querySelector('.btn-row-preview');
       if (prevBtn) {
         prevBtn.addEventListener('click', () => {
-          previewTrackAudio(track);
+          playOnlineTrack(track, tracks, idx);
+        });
+      }
+
+      // Add to playlist listener
+      const addPlBtn = row.querySelector('.btn-row-add-pl');
+      if (addPlBtn) {
+        addPlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAddToPlaylistModal(track);
+        });
+      }
+
+      // If custom playlist, remove track listener
+      const removeBtn = row.querySelector('.btn-row-remove-pl');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            const res = await fetch(`/api/playlists/${encodeURIComponent(currentModalPlaylist.id)}/tracks/${idx}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              const updated = await res.json();
+              currentModalPlaylist.tracks = updated.tracks;
+              renderModalTracklist(currentModalPlaylist.tracks);
+              modalTrackCount.textContent = `${currentModalPlaylist.tracks.length} track${currentModalPlaylist.tracks.length === 1 ? '' : 's'}`;
+              showToast(`Removed from playlist`, 'info');
+              loadUserPlaylists();
+            }
+          } catch (err) {
+            showToast('Failed to remove track', 'error');
+          }
         });
       }
 
       // Download single track listener
       const dlBtn = row.querySelector('.btn-row-download');
-      dlBtn.addEventListener('click', () => {
-        downloadSingleTrack(track, dlBtn);
-      });
+      if (dlBtn) {
+        dlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          downloadSingleTrack(track, dlBtn);
+        });
+      }
 
       modalTracklist.appendChild(row);
+    });
+  }
+
+  // ==================== CREATE PLAYLIST MODAL HANDLERS ====================
+  function openCreatePlaylistModal() {
+    if (!createPlaylistModal) return;
+    createPlaylistModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    pendingCoverBase64 = null;
+    if (coverPreviewImg) coverPreviewImg.src = '/static/placeholder.svg';
+    if (playlistNameInput) {
+      playlistNameInput.value = '';
+      setTimeout(() => playlistNameInput.focus(), 100);
+    }
+    if (playlistDescInput) playlistDescInput.value = '';
+    if (playlistUrlInput) playlistUrlInput.value = '';
+    if (playlistFileInput) playlistFileInput.value = '';
+  }
+
+  function closeCreatePlaylistModal() {
+    if (!createPlaylistModal) return;
+    createPlaylistModal.style.display = 'none';
+    document.body.style.overflow = '';
+    pendingCoverBase64 = null;
+  }
+
+  if (btnCreatePlaylist) btnCreatePlaylist.addEventListener('click', openCreatePlaylistModal);
+  if (createPlaylistClose) createPlaylistClose.addEventListener('click', closeCreatePlaylistModal);
+  if (createPlaylistBackdrop) createPlaylistBackdrop.addEventListener('click', closeCreatePlaylistModal);
+  if (btnCancelPlaylist) btnCancelPlaylist.addEventListener('click', closeCreatePlaylistModal);
+
+  if (coverPreviewBox && playlistFileInput) {
+    coverPreviewBox.addEventListener('click', () => {
+      playlistFileInput.click();
+    });
+
+    playlistFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        pendingCoverBase64 = evt.target.result;
+        coverPreviewImg.src = pendingCoverBase64;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    coverPreviewBox.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      coverPreviewBox.style.borderColor = 'var(--emerald)';
+    });
+    coverPreviewBox.addEventListener('dragleave', () => {
+      coverPreviewBox.style.borderColor = '';
+    });
+    coverPreviewBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      coverPreviewBox.style.borderColor = '';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          pendingCoverBase64 = evt.target.result;
+          coverPreviewImg.src = pendingCoverBase64;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (playlistUrlInput) {
+    playlistUrlInput.addEventListener('input', (e) => {
+      const url = e.target.value.trim();
+      if (url && !pendingCoverBase64) {
+        coverPreviewImg.src = url;
+      } else if (!pendingCoverBase64) {
+        coverPreviewImg.src = '/static/placeholder.svg';
+      }
+    });
+  }
+
+  if (createPlaylistForm) {
+    createPlaylistForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = playlistNameInput ? playlistNameInput.value.trim() : '';
+      if (!title) {
+        showToast('Please enter a playlist title', 'error');
+        return;
+      }
+      const description = playlistDescInput ? playlistDescInput.value.trim() : '';
+      const cover_url = playlistUrlInput ? playlistUrlInput.value.trim() : '';
+
+      try {
+        const submitBtn = document.getElementById('btn-submit-playlist');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Creating...';
+        }
+
+        const res = await fetch('/api/playlists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, cover_url })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to create playlist');
+        }
+
+        const newPlaylist = await res.json();
+
+        // If custom uploaded local image
+        if (pendingCoverBase64) {
+          try {
+            await fetch(`/api/playlists/${newPlaylist.id}/cover`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image_data: pendingCoverBase64 })
+            });
+          } catch (covErr) {
+            console.error('Failed to upload cover', covErr);
+          }
+        }
+
+        closeCreatePlaylistModal();
+        showToast(`Playlist "${newPlaylist.title}" created successfully!`, 'success');
+
+        // If we had a track waiting to be added, add it now!
+        if (trackToAdd) {
+          await addTrackToPlaylistById(newPlaylist.id, trackToAdd);
+          trackToAdd = null;
+        }
+
+        // Switch to playlists view in library
+        activateTab('library');
+        currentGroupMode = 'playlists';
+        groupPills.forEach(p => p.classList.toggle('active', p.dataset.group === 'playlists'));
+        await loadUserPlaylists();
+        renderLibrary();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        const submitBtn = document.getElementById('btn-submit-playlist');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Playlist';
+        }
+      }
+    });
+  }
+
+  // ==================== ADD TO PLAYLIST MODAL HANDLERS ====================
+  function openAddToPlaylistModal(track) {
+    trackToAdd = track;
+    if (!addToPlaylistModal) return;
+    addToPlaylistModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    if (addToPlaylistTrackName) {
+      addToPlaylistTrackName.textContent = `Select a playlist for "${track.title}"`;
+    }
+
+    renderAddToPlaylistList();
+  }
+
+  function closeAddToPlaylistModal() {
+    if (!addToPlaylistModal) return;
+    addToPlaylistModal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  if (addToPlaylistClose) addToPlaylistClose.addEventListener('click', closeAddToPlaylistModal);
+  if (addToPlaylistBackdrop) addToPlaylistBackdrop.addEventListener('click', closeAddToPlaylistModal);
+
+  if (btnQuickCreateFromAdd) {
+    btnQuickCreateFromAdd.addEventListener('click', () => {
+      closeAddToPlaylistModal();
+      openCreatePlaylistModal();
+    });
+  }
+
+  function renderAddToPlaylistList() {
+    if (!addToPlaylistList) return;
+    addToPlaylistList.innerHTML = '';
+
+    if (!userPlaylists.length) {
+      addToPlaylistList.innerHTML = `
+        <div style="padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 0.85rem;">
+          No playlists created yet. Create your first playlist below!
+        </div>
+      `;
+      return;
+    }
+
+    userPlaylists.forEach(pl => {
+      const item = document.createElement('div');
+      item.className = 'add-to-playlist-item';
+      const count = pl.track_count || (pl.tracks ? pl.tracks.length : 0);
+      const thumbSrc = pl.cover_url || '/static/placeholder.svg';
+      const badgeClass = pl.is_custom ? 'playlist-badge-custom' : 'playlist-badge-saved';
+      const badgeText = pl.is_custom ? 'Custom' : 'Saved';
+
+      item.innerHTML = `
+        <img class="add-to-playlist-thumb" src="${thumbSrc}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <div class="add-to-playlist-info">
+          <div class="add-to-playlist-name truncate">${escapeHtml(pl.title)}</div>
+          <div class="add-to-playlist-sub">${count} track${count === 1 ? '' : 's'}</div>
+        </div>
+        <span class="add-to-playlist-badge ${badgeClass}">${badgeText}</span>
+      `;
+
+      item.addEventListener('click', async () => {
+        if (!trackToAdd) return;
+        await addTrackToPlaylistById(pl.id, trackToAdd);
+        closeAddToPlaylistModal();
+      });
+
+      addToPlaylistList.appendChild(item);
+    });
+  }
+
+  async function addTrackToPlaylistById(playlistId, track) {
+    try {
+      const payload = {
+        title: track.title,
+        artist: track.artist || 'Unknown Artist',
+        album: track.album || '',
+        cover_url: track.cover_url || (track.filename ? `/api/songs/artwork/${encodeURIComponent(track.filename)}` : ''),
+        duration: track.duration || 0,
+        query: track.query || `${track.artist || ''} - ${track.title}`
+      };
+
+      const res = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to add track');
+      }
+
+      showToast(`Added "${track.title}" to playlist!`, 'success');
+      await loadUserPlaylists();
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  }
+
+  if (drawerAddPlaylistBtn) {
+    drawerAddPlaylistBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedSong) {
+        openAddToPlaylistModal({
+          title: selectedSong.title,
+          artist: selectedSong.artist,
+          album: selectedSong.album,
+          filename: selectedSong.filename,
+          cover_url: `/api/songs/artwork/${encodeURIComponent(selectedSong.filename)}`,
+          duration: selectedSong.duration
+        });
+      }
     });
   }
 
@@ -1379,6 +2124,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function playTrack(idx) {
     if (idx < 0 || idx >= librarySongs.length) return;
+    isOnlineStreaming = false;
+    currentStreamingTrack = null;
     currentSongIndex = idx;
     playHistory.push(idx);
     if (playHistory.length > 100) playHistory.shift();
@@ -1405,6 +2152,12 @@ document.addEventListener('DOMContentLoaded', () => {
     playerCurrentTime.textContent = '0:00';
     playerTotalTime.textContent = formatSeconds(song.duration || 0);
 
+    // Hide stream actions
+    const dockStreamBadge = document.getElementById('dock-stream-badge');
+    if (dockStreamBadge) dockStreamBadge.style.display = 'none';
+    const dockQuickDl = document.getElementById('dock-quick-dl-btn');
+    if (dockQuickDl) dockQuickDl.style.display = 'none';
+
     // Synchronize to Fullscreen "Now Playing" Overlay
     if (fsCover) fsCover.src = coverUrl;
     if (fsTitle) fsTitle.textContent = song.title || 'Unknown Track';
@@ -1416,6 +2169,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (fsCurrentTime) fsCurrentTime.textContent = '0:00';
     if (fsTotalTime) fsTotalTime.textContent = formatSeconds(song.duration || 0);
+
+    const fsStreamActions = document.getElementById('fs-stream-actions');
+    if (fsStreamActions) fsStreamActions.style.display = 'none';
+    const fsStreamBadge = document.getElementById('fs-stream-badge-floating');
+    if (fsStreamBadge) fsStreamBadge.style.display = 'none';
 
     isPlaying = true;
     updatePlayIcon(true);
@@ -1471,13 +2229,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function playNextTrack() {
-    if (!librarySongs.length) return;
-
     if (repeatMode === 'one') {
       audioEngine.currentTime = 0;
       audioEngine.play().catch(() => {});
       return;
     }
+
+    if (isOnlineStreaming) {
+      if (!currentOnlineQueue || !currentOnlineQueue.length) return;
+      if (isShuffle) {
+        const nextIdx = Math.floor(Math.random() * currentOnlineQueue.length);
+        playOnlineTrack(currentOnlineQueue[nextIdx], currentOnlineQueue, nextIdx);
+      } else {
+        if (currentOnlineQueueIndex < currentOnlineQueue.length - 1) {
+          const nextIdx = currentOnlineQueueIndex + 1;
+          playOnlineTrack(currentOnlineQueue[nextIdx], currentOnlineQueue, nextIdx);
+        } else if (repeatMode === 'all') {
+          playOnlineTrack(currentOnlineQueue[0], currentOnlineQueue, 0);
+        } else {
+          audioEngine.pause();
+          audioEngine.currentTime = 0;
+          isPlaying = false;
+          updatePlayIcon(false);
+        }
+      }
+      return;
+    }
+
+    if (!librarySongs.length) return;
 
     if (isShuffle) {
       if (!shuffleQueue.length || shuffleQueue.length !== librarySongs.length) {
@@ -1513,13 +2292,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function playPrevTrack() {
-    if (!librarySongs.length) return;
-
     // Standard player UX: if played > 3s, restart current track
     if (audioEngine.currentTime > 3) {
       audioEngine.currentTime = 0;
       return;
     }
+
+    if (isOnlineStreaming) {
+      if (!currentOnlineQueue || !currentOnlineQueue.length) return;
+      if (isShuffle) {
+        const prevIdx = Math.floor(Math.random() * currentOnlineQueue.length);
+        playOnlineTrack(currentOnlineQueue[prevIdx], currentOnlineQueue, prevIdx);
+      } else {
+        if (currentOnlineQueueIndex > 0) {
+          const prevIdx = currentOnlineQueueIndex - 1;
+          playOnlineTrack(currentOnlineQueue[prevIdx], currentOnlineQueue, prevIdx);
+        } else if (repeatMode === 'all') {
+          const prevIdx = currentOnlineQueue.length - 1;
+          playOnlineTrack(currentOnlineQueue[prevIdx], currentOnlineQueue, prevIdx);
+        } else {
+          audioEngine.currentTime = 0;
+        }
+      }
+      return;
+    }
+
+    if (!librarySongs.length) return;
 
     if (isShuffle && shuffleQueue.length) {
       if (shufflePointer > 0) {
@@ -1650,7 +2448,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   audioEngine.addEventListener('ended', () => {
-    if (currentSongIndex >= 0 && librarySongs.length > 0) {
+    if (repeatMode === 'one') {
+      audioEngine.currentTime = 0;
+      audioEngine.play().catch(() => {});
+      return;
+    }
+    if (isOnlineStreaming) {
+      playNextTrack();
+    } else if (currentSongIndex >= 0 && librarySongs.length > 0) {
       playNextTrack();
     } else {
       isPlaying = false;
@@ -1665,6 +2470,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (fsCurrentTime) fsCurrentTime.textContent = '0:00';
     }
   });
+
+  // Dock & Fullscreen Streaming Save Buttons
+  const dockQuickDlBtn = document.getElementById('dock-quick-dl-btn');
+  if (dockQuickDlBtn) {
+    dockQuickDlBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveCurrentStreamingTrack();
+    });
+  }
+
+  const fsSaveBtn = document.getElementById('fs-save-btn');
+  if (fsSaveBtn) {
+    fsSaveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveCurrentStreamingTrack();
+    });
+  }
 
   // Dock Scrubber: Live Dragging & Seeking
   playerScrubber.addEventListener('pointerdown', () => {
@@ -2062,6 +2884,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initEventStream();
   loadExplore();
   loadLibrary();
+  loadUserPlaylists();
   handleHash();
   updateShuffleUI();
   updateRepeatUI();

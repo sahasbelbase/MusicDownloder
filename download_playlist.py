@@ -25,7 +25,7 @@ from threading import Lock
 from typing import List, Dict, Optional, Tuple
 
 import mutagen
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
 
 def get_default_output_folder():
     if getattr(sys, 'frozen', False):
@@ -34,6 +34,7 @@ def get_default_output_folder():
         return user_music
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
 
+DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 DEFAULT_OUTPUT_FOLDER = get_default_output_folder()
 DEFAULT_THREADS = 3
 DEFAULT_BITRATE = "320k"
@@ -377,15 +378,17 @@ def embed_id3_tags(file_path: str, track_info: Dict, enriched_metadata: Dict = N
             audio.add(TIT2(encoding=3, text=title))
         if artist:
             audio.add(TPE1(encoding=3, text=artist))
+            audio.add(TPE2(encoding=3, text=artist))  # Album Artist for Windows Explorer & macOS Finder
         if album:
             audio.add(TALB(encoding=3, text=album))
+        elif title:
+            audio.add(TALB(encoding=3, text=title))
         if year and year.isdigit():
             audio.add(TDRC(encoding=3, text=year))
         if genre:
             audio.add(TCON(encoding=3, text=genre))
         if collaborators:
-            # TPE4 = involved people list, TPE3 = conductor, TPE2 = band/orchestra
-            # Using TPE4 for featured artists/collaborators
+            # TPE4 = involved people list
             audio.add(TPE4(encoding=3, text=collaborators))
         if track_num and track_num.isdigit():
             audio.add(TRCK(encoding=3, text=track_num))
@@ -399,17 +402,22 @@ def embed_id3_tags(file_path: str, track_info: Dict, enriched_metadata: Dict = N
             try:
                 req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=10) as resp:
-                    img_data = resp.read()
-                    mime_type = "image/jpeg"
-                    if cover_url.lower().endswith(".png"):
-                        mime_type = "image/png"
-                    elif cover_url.lower().endswith(".webp"):
-                        mime_type = "image/webp"
+                    raw_data = resp.read()
+                    import io
+                    from PIL import Image
+                    try:
+                        # Convert to baseline RGB JPEG for 100% universal OS compatibility (macOS Finder & Windows Explorer)
+                        pil_img = Image.open(io.BytesIO(raw_data)).convert('RGB')
+                        buf = io.BytesIO()
+                        pil_img.save(buf, format='JPEG', quality=95, optimize=True)
+                        img_data = buf.getvalue()
+                    except Exception:
+                        img_data = raw_data
 
                     audio.delall('APIC')
                     audio.add(APIC(
                         encoding=3,
-                        mime=mime_type,
+                        mime="image/jpeg",
                         type=3,
                         desc="Cover",
                         data=img_data

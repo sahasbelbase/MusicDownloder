@@ -51,6 +51,10 @@ hiddenimports = [
     'certifi',
     'webview',
     'webview.platforms.cocoa',
+    'app',
+    'download_playlist',
+    'discovery',
+    'fix_metadata',
 ]
 
 a = Analysis(

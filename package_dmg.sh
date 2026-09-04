@@ -19,6 +19,10 @@ if [ ! -d "dist/Music Studio.app" ]; then
     exit 1
 fi
 
+echo "🔑 Step 1b: Applying macOS ad-hoc code signature and clearing quarantine..."
+xattr -cr "dist/Music Studio.app"
+codesign --force --deep --sign - "dist/Music Studio.app"
+
 echo "✨ Step 2/3: Preparing DMG installer staging..."
 mkdir -p dist/dmg_staging
 cp -R "dist/Music Studio.app" "dist/dmg_staging/"

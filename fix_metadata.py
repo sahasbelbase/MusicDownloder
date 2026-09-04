@@ -28,7 +28,7 @@ from typing import Optional, Dict, Tuple
 from difflib import SequenceMatcher
 
 import mutagen
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TCON, APIC, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TCON, APIC, ID3NoHeaderError
 from mutagen.easyid3 import EasyID3
 
 DEFAULT_SONGS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
@@ -315,6 +315,7 @@ def process_file(file_path: str, upgrade_artwork: bool = True, force: bool = Fal
             audio.add(TIT2(encoding=3, text=meta['title']))
         if meta.get('artist'):
             audio.add(TPE1(encoding=3, text=meta['artist']))
+            audio.add(TPE2(encoding=3, text=meta['artist']))  # Album Artist for Windows Explorer & macOS Finder
         if meta.get('album'):
             audio.add(TALB(encoding=3, text=meta['album']))
         if meta.get('year') and str(meta['year']).isdigit():
@@ -322,12 +323,22 @@ def process_file(file_path: str, upgrade_artwork: bool = True, force: bool = Fal
         if meta.get('genre'):
             audio.add(TCON(encoding=3, text=meta['genre']))
 
-        # Upgrade artwork to 1000x1000 HD
+        # Upgrade artwork to 1000x1000 HD baseline JPEG
         if upgrade_artwork and meta.get('artwork_url'):
             try:
                 req = urllib.request.Request(meta['artwork_url'], headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=8) as resp:
-                    img_data = resp.read()
+                    raw_data = resp.read()
+                    import io
+                    from PIL import Image
+                    try:
+                        pil_img = Image.open(io.BytesIO(raw_data)).convert('RGB')
+                        buf = io.BytesIO()
+                        pil_img.save(buf, format='JPEG', quality=95, optimize=True)
+                        img_data = buf.getvalue()
+                    except Exception:
+                        img_data = raw_data
+
                     audio.delall('APIC')
                     audio.add(APIC(
                         encoding=3,

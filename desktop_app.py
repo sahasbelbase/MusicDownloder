@@ -16,6 +16,19 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+# Setup safe logging for windowed mode
+log_dir = os.path.expanduser("~/Library/Logs/MusicStudio")
+try:
+    os.makedirs(log_dir, exist_ok=True)
+    log_fp = open(os.path.join(log_dir, "desktop_app.log"), "a", encoding="utf-8")
+    sys.stdout = log_fp
+    sys.stderr = log_fp
+except Exception:
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, 'w')
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, 'w')
+
 import uvicorn
 from app import app, SONGS_DIR
 
@@ -112,4 +125,14 @@ def main():
     server_thread.stop()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        err_text = traceback.format_exc()
+        try:
+            with open(os.path.expanduser("~/Library/Logs/MusicStudio/crash.log"), "w", encoding="utf-8") as f:
+                f.write(err_text)
+        except Exception:
+            pass
+        sys.exit(1)
