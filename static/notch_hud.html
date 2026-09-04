@@ -304,7 +304,7 @@
     <!-- Collapsed Pill (Mounted under Hardware Camera Notch) -->
     <div class="notch-collapsed" id="notch-collapsed">
       <div class="mini-left">
-        <img class="mini-cover" id="mini-cover" src="/static/placeholder.svg" alt="Cover" />
+        <img class="mini-cover" id="mini-cover" src="placeholder.svg" alt="Cover" />
         <span class="mini-title" id="mini-title">Music Studio</span>
       </div>
       <div class="mini-eq" id="mini-eq">
@@ -318,7 +318,7 @@
     <!-- Expanded Dynamic Island Dropdown -->
     <div class="notch-expanded" id="notch-expanded">
       <div class="vinyl-wrap" id="vinyl-wrap">
-        <img class="vinyl-cover" id="expanded-cover" src="/static/placeholder.svg" alt="Cover" />
+        <img class="vinyl-cover" id="expanded-cover" src="placeholder.svg" alt="Cover" />
         <div class="vinyl-center"></div>
       </div>
 
@@ -414,7 +414,7 @@
 
       const title = state.title || 'Music Studio';
       const artist = state.artist || 'Local Library';
-      const cover = state.cover_url || '/static/placeholder.svg';
+      const cover = state.cover_url || 'placeholder.svg';
 
       miniTitle.textContent = title;
       expandedTitle.textContent = title;

@@ -14,15 +14,15 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="stylesheet" href="/static/style.css?v=3.5.0" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="style.css?v=3.6.0" />
   </head>
   <body>
     <!-- Mac Notch Music HUD / Dynamic Island -->
-    <div id="mac-notch-hud" class="mac-notch-hud hud-hidden" aria-label="Mac Notch Music Player">
+    <div id="mac-notch-hud" class="mac-notch-hud hud-hidden" style="display: none;" aria-label="Mac Notch Music Player">
       <!-- Collapsed Notch Island Pill -->
       <div class="notch-pill" id="notch-pill" title="Mac Notch Player (Click to expand)">
-        <img id="notch-mini-art" class="notch-mini-art" src="/static/placeholder.svg" alt="Notch Cover" />
+        <img id="notch-mini-art" class="notch-mini-art" src="placeholder.svg" alt="Notch Cover" />
         <div class="notch-mini-info">
           <span id="notch-mini-title" class="notch-mini-title">Music Studio</span>
           <span id="notch-mini-artist" class="notch-mini-artist">Playing Local Music</span>
@@ -41,7 +41,7 @@
       <!-- Expanded Dynamic Island HUD -->
       <div class="notch-expanded-island" id="notch-expanded-island">
         <div class="notch-track-row">
-          <img id="notch-expanded-art" class="notch-expanded-art" src="/static/placeholder.svg" alt="Album Art" />
+          <img id="notch-expanded-art" class="notch-expanded-art" src="placeholder.svg" alt="Album Art" />
           <div class="notch-details">
             <div id="notch-expanded-title" class="notch-expanded-title">Not Playing</div>
             <div id="notch-expanded-artist" class="notch-expanded-artist">Select a song to start</div>
@@ -556,7 +556,7 @@
       <footer class="player-dock glass" id="player-bar">
         <div class="dock-track-info" id="dock-track-info" title="Click to Expand Fullscreen Player">
           <div class="dock-cover-wrap">
-            <img id="player-cover" src="/static/placeholder.svg" alt="Now Playing" class="dock-cover" />
+            <img id="player-cover" src="placeholder.svg" alt="Now Playing" class="dock-cover" />
             <span class="dock-stream-badge" id="dock-stream-badge" style="display: none;" title="Streaming Online">LIVE</span>
           </div>
           <div class="dock-text">
@@ -656,8 +656,8 @@
       </button>
 
       <div class="drawer-content">
-        <div class="drawer-art-wrap">
-          <img id="drawer-cover" src="/static/placeholder.svg" alt="Album Art" />
+        <div class="drawer-header-art">
+          <img id="drawer-cover" src="placeholder.svg" alt="Album Art" />
           <span class="drawer-bitrate-badge" id="drawer-bitrate">320 kbps</span>
         </div>
 
@@ -715,7 +715,7 @@
       <div class="modal-window glass">
         <button class="modal-close-icon" id="modal-close-btn" title="Close Modal">&times;</button>
         <div class="modal-hero">
-          <img id="modal-cover" src="/static/placeholder.svg" alt="Playlist Art" class="modal-hero-cover" />
+          <img id="modal-cover" src="placeholder.svg" alt="Playlist Art" class="modal-hero-cover" />
           <div class="modal-hero-info">
             <span class="modal-badge" id="modal-badge">Curated Collection</span>
             <h2 id="modal-title" class="modal-title">Today's Top Hits</h2>
@@ -772,7 +772,7 @@
           <div class="playlist-form-grid">
             <div class="playlist-cover-picker">
               <div class="cover-preview-box" id="cover-preview-box" title="Click to Upload Cover Image">
-                <img id="cover-preview-img" src="/static/placeholder.svg" alt="Cover Preview" />
+                <img id="cover-preview-img" src="placeholder.svg" alt="Cover Preview" />
                 <div class="cover-upload-overlay">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -922,7 +922,7 @@
       <!-- Center Hero Stage -->
       <div class="fs-stage">
         <div class="fs-cover-container">
-          <img id="fs-cover" src="/static/placeholder.svg" alt="Album Cover" class="fs-cover-img" />
+          <img id="fs-cover" src="placeholder.svg" alt="Album Cover" class="fs-cover-img" />
           <div class="fs-stream-badge-floating" id="fs-stream-badge-floating" style="display: none;">
             <span class="live-dot-pulse"></span>
             <span>Online Stream</span>
@@ -1049,6 +1049,6 @@
     <!-- Notification Toasts -->
     <div id="toast-container" class="toast-stack"></div>
 
-    <script src="/static/app.js?v=3.5.0"></script>
+    <script src="app.js?v=3.6.0"></script>
   </body>
 </html>

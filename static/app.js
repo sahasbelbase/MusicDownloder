@@ -3,6 +3,33 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // ==================== UNIVERSAL API & SERVER ROUTING ====================
+  function getServerBaseUrl() {
+    const custom = (localStorage.getItem('musicstudio_server_url') || '').trim();
+    if (custom) return custom.replace(/\/+$/, '');
+    return '';
+  }
+
+  function resolveApiUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) {
+      return path;
+    }
+    const base = getServerBaseUrl();
+    const clean = path.startsWith('/') ? path : '/' + path;
+    return base ? `${base}${clean}` : clean;
+  }
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    if (typeof input === 'string' && input.startsWith('/api/')) {
+      input = resolveApiUrl(input);
+    } else if (input instanceof Request && input.url.includes('/api/')) {
+      // In case Request object is passed
+    }
+    return nativeFetch(input, init);
+  };
+
   // DOM Elements
   const inputUrl = document.getElementById('input-url');
   const platformIcon = document.getElementById('platform-icon');
@@ -504,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     row.innerHTML = `
       <div class="feed-item-left">
-        <img class="feed-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <img class="feed-thumb" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" />
         <div class="feed-item-text truncate">
           <div class="feed-item-title truncate">${escapeHtml(song.title || 'Unknown Track')}</div>
           <div class="feed-item-artist truncate">${escapeHtml(song.artist || 'Unknown Artist')}</div>
@@ -529,14 +556,28 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error('Failed to load songs');
 
       rawLibrarySongs = await res.json();
+      if (!query) {
+        localStorage.setItem('musicstudio_cached_library', JSON.stringify(rawLibrarySongs));
+      }
       navSongCount.textContent = rawLibrarySongs.length;
       if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
       libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
 
       applySortAndFilter();
     } catch (e) {
-      console.error(e);
-      libraryContainer.innerHTML = `<div class="empty-state glass"><p>Failed to load music library</p></div>`;
+      console.warn('Network issue fetching library, falling back to local cache:', e);
+      const cached = localStorage.getItem('musicstudio_cached_library');
+      if (cached) {
+        try {
+          rawLibrarySongs = JSON.parse(cached);
+          navSongCount.textContent = rawLibrarySongs.length;
+          if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
+          libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'} (Cached)`;
+          applySortAndFilter();
+          return;
+        } catch (err) {}
+      }
+      libraryContainer.innerHTML = `<div class="empty-state glass"><p>No songs found. Connect to desktop server or download tracks to populate your library.</p></div>`;
     }
   }
 
@@ -545,12 +586,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/playlists');
       if (res.ok) {
         userPlaylists = await res.json();
+        localStorage.setItem('musicstudio_cached_playlists', JSON.stringify(userPlaylists));
         if (currentGroupMode === 'playlists') {
           renderLibrary();
         }
       }
     } catch (e) {
-      console.error('Failed to load user playlists', e);
+      console.warn('Network issue fetching playlists, falling back to local cache:', e);
+      const cached = localStorage.getItem('musicstudio_cached_playlists');
+      if (cached) {
+        try {
+          userPlaylists = JSON.parse(cached);
+          if (currentGroupMode === 'playlists') {
+            renderLibrary();
+          }
+        } catch (err) {}
+      }
     }
   }
 
@@ -633,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           card.innerHTML = `
             <div class="song-card-art-wrap">
-              <img class="song-card-art" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" loading="lazy" />
+              <img class="song-card-art" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" loading="lazy" />
               <div class="song-card-play-overlay">
                 <div class="card-play-circle" title="Play">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -672,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
           row.innerHTML = `
             <div class="song-row-left">
               <span class="song-row-num">${idx + 1}</span>
-              <img class="song-row-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+              <img class="song-row-thumb" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" />
               <div class="song-row-meta truncate">
                 <div class="song-row-title truncate" title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</div>
                 <div class="song-row-artist truncate" title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</div>
@@ -722,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = 'group-card';
         card.innerHTML = `
-          <img class="artist-avatar" src="${repCover}" onerror="this.src='/static/placeholder.svg'" alt="${escapeHtml(artist)}" />
+          <img class="artist-avatar" src="${repCover}" onerror="this.src='placeholder.svg'" alt="${escapeHtml(artist)}" />
           <div class="group-title truncate" title="${escapeHtml(artist)}">${escapeHtml(artist)}</div>
           <div class="group-sub">${songs.length} track${songs.length === 1 ? '' : 's'}</div>
         `;
@@ -761,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'group-card';
         card.innerHTML = `
           <div class="album-art-wrap">
-            <img src="${repCover}" onerror="this.src='/static/placeholder.svg'" alt="${escapeHtml(item.album)}" />
+            <img src="${repCover}" onerror="this.src='placeholder.svg'" alt="${escapeHtml(item.album)}" />
           </div>
           <div class="group-title truncate" title="${escapeHtml(item.album)}">${escapeHtml(item.album)}</div>
           <div class="group-sub truncate">${escapeHtml(item.artist)}${item.year ? ` • ${item.year}` : ''} • ${item.songs.length} tracks</div>
@@ -884,13 +935,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const isCustom = !isSmart && isCustomPl(playlist);
       const badgeClass = isSmart ? 'playlist-badge-smart' : (isCustom ? 'playlist-badge-custom' : 'playlist-badge-saved');
       const badgeText = isSmart ? '🔥 Top 100' : (isCustom ? 'Custom' : 'Saved');
-      const coverSrc = playlist.cover_url || '/static/placeholder.svg';
+      const coverSrc = playlist.cover_url || 'placeholder.svg';
 
       if (isSmart) card.classList.add('smart-card');
 
       card.innerHTML = `
         <div class="playlist-card-art-wrap">
-          <img class="playlist-card-art" src="${coverSrc}" onerror="this.src='/static/placeholder.svg'" alt="${escapeHtml(playlist.title)}" loading="lazy" />
+          <img class="playlist-card-art" src="${coverSrc}" onerror="this.src='placeholder.svg'" alt="${escapeHtml(playlist.title)}" loading="lazy" />
           <span class="playlist-card-badge ${badgeClass}">${badgeText}</span>
           <button class="playlist-card-delete-btn" title="Delete Playlist">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
@@ -996,11 +1047,11 @@ document.addEventListener('DOMContentLoaded', () => {
       topTracks.forEach((song, idx) => {
         const card = document.createElement('div');
         card.className = 'song-card';
-        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : '/static/placeholder.svg');
+        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : 'placeholder.svg');
 
         card.innerHTML = `
           <div class="song-card-art-wrap">
-            <img class="song-card-art" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" loading="lazy" />
+            <img class="song-card-art" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" loading="lazy" />
             <div class="song-card-play-overlay">
               <div class="card-play-circle" title="Play">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1026,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topTracks.forEach((song, idx) => {
         const row = document.createElement('div');
         row.className = 'song-row';
-        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : '/static/placeholder.svg');
+        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : 'placeholder.svg');
 
         row.innerHTML = `
           <div class="col-index">
@@ -1036,7 +1087,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="col-title">
-            <img class="song-row-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Thumb" loading="lazy" />
+            <img class="song-row-thumb" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Thumb" loading="lazy" />
             <div class="song-title-group">
               <div class="song-row-title truncate" title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</div>
               <div class="song-row-artist truncate" title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</div>
@@ -1350,12 +1401,12 @@ document.addEventListener('DOMContentLoaded', () => {
     card.className = 'explore-song-card';
 
     const durationText = (track.duration && track.duration > 0) ? formatSeconds(track.duration) : '3:30';
-    const coverUrl = track.cover_url || '/static/placeholder.svg';
+    const coverUrl = track.cover_url || 'placeholder.svg';
     const isSaved = !!findLocalLibraryMatch(track);
 
     card.innerHTML = `
       <div class="explore-song-thumb-wrap">
-        <img class="explore-song-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <img class="explore-song-thumb" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" />
         <div class="explore-song-preview-overlay" title="Play Full Track Online (Stream)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
@@ -1435,8 +1486,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const query = track.query || `${track.title} ${track.artist}`;
-    const streamEndpoint = `/api/stream?q=${encodeURIComponent(query)}`;
-    const coverUrl = track.cover_url || '/static/placeholder.svg';
+    const streamEndpoint = resolveApiUrl(`/api/stream?q=${encodeURIComponent(query)}`);
+    const coverUrl = track.cover_url || 'placeholder.svg';
     const totalSec = (track.duration && track.duration > 0) ? track.duration : 0;
 
     audioEngine.src = streamEndpoint;
@@ -1681,13 +1732,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function createSearchAlbumCard(album) {
     const card = document.createElement('div');
     card.className = 'search-album-card';
-    const coverUrl = album.cover_url || '/static/placeholder.svg';
+    const coverUrl = album.cover_url || 'placeholder.svg';
     const trackCountText = album.track_count ? `${album.track_count} Tracks` : 'Album';
     const metaText = album.year ? `${album.year} • ${trackCountText}` : trackCountText;
 
     card.innerHTML = `
       <div class="album-card-art-wrap">
-        <img class="album-card-art" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <img class="album-card-art" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" />
         <span class="album-card-badge">Album</span>
       </div>
       <div class="album-card-info">
@@ -1782,7 +1833,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modalTitle.textContent = data.title;
     modalSubtitle.textContent = data.subtitle || data.description || (isCustom ? 'Personal Custom Playlist' : (isAlbType ? `${data.artist || 'Artist'} • Album Master` : 'Curated Studio Collection'));
-    modalCover.src = data.cover_url || '/static/placeholder.svg';
+    modalCover.src = data.cover_url || 'placeholder.svg';
     const count = (data.tracks ? data.tracks.length : (data.track_count || 0));
     modalTrackCount.textContent = `${count} track${count === 1 ? '' : 's'}`;
 
@@ -1894,12 +1945,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const row = document.createElement('div');
       row.className = 'modal-track-row';
       const durationText = (track.duration && track.duration > 0) ? formatSeconds(track.duration) : '3:30';
-      const coverUrl = track.cover_url || '/static/placeholder.svg';
+      const coverUrl = track.cover_url || 'placeholder.svg';
 
       row.innerHTML = `
         <span class="row-num">${idx + 1}</span>
         <div class="row-meta">
-          <img class="row-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+          <img class="row-thumb" src="${coverUrl}" onerror="this.src='placeholder.svg'" alt="Cover" />
           <div class="row-text">
             <div class="row-title truncate" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
             <div class="row-artist truncate" title="${escapeHtml(track.artist)}">${escapeHtml(track.artist)}</div>
@@ -1995,7 +2046,7 @@ document.addEventListener('DOMContentLoaded', () => {
     createPlaylistModal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     pendingCoverBase64 = null;
-    if (coverPreviewImg) coverPreviewImg.src = '/static/placeholder.svg';
+    if (coverPreviewImg) coverPreviewImg.src = 'placeholder.svg';
     if (playlistNameInput) {
       playlistNameInput.value = '';
       setTimeout(() => playlistNameInput.focus(), 100);
@@ -2061,7 +2112,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (url && !pendingCoverBase64) {
         coverPreviewImg.src = url;
       } else if (!pendingCoverBase64) {
-        coverPreviewImg.src = '/static/placeholder.svg';
+        coverPreviewImg.src = 'placeholder.svg';
       }
     });
   }
@@ -2184,12 +2235,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const item = document.createElement('div');
       item.className = 'add-to-playlist-item';
       const count = pl.track_count || (pl.tracks ? pl.tracks.length : 0);
-      const thumbSrc = pl.cover_url || '/static/placeholder.svg';
+      const thumbSrc = pl.cover_url || 'placeholder.svg';
       const badgeClass = pl.is_custom ? 'playlist-badge-custom' : 'playlist-badge-saved';
       const badgeText = pl.is_custom ? 'Custom' : 'Saved';
 
       item.innerHTML = `
-        <img class="add-to-playlist-thumb" src="${thumbSrc}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <img class="add-to-playlist-thumb" src="${thumbSrc}" onerror="this.src='placeholder.svg'" alt="Cover" />
         <div class="add-to-playlist-info">
           <div class="add-to-playlist-name truncate">${escapeHtml(pl.title)}</div>
           <div class="add-to-playlist-sub">${count} track${count === 1 ? '' : 's'}</div>
@@ -2347,7 +2398,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupMediaSession(meta) {
     if (!('mediaSession' in navigator)) return;
     try {
-      const artworkSrc = meta.artwork_url || '/static/placeholder.svg';
+      const artworkSrc = meta.artwork_url || 'placeholder.svg';
       const absoluteArt = new URL(artworkSrc, window.location.origin).href;
       navigator.mediaSession.metadata = new MediaMetadata({
         title: meta.title || 'Music Studio Track',
@@ -2425,7 +2476,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const title = meta.title || 'Unknown Track';
     const artist = meta.artist || 'Unknown Artist';
-    const artUrl = meta.artwork_url || '/static/placeholder.svg';
+    const artUrl = meta.artwork_url || 'placeholder.svg';
 
     if (notchMiniArt) notchMiniArt.src = artUrl;
     if (notchMiniTitle) notchMiniTitle.textContent = title;
@@ -2455,8 +2506,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (playHistory.length > 100) playHistory.shift();
 
     const song = librarySongs[idx];
-    const audioUrl = `/api/songs/audio/${encodeURIComponent(song.filename)}`;
-    const coverUrl = `/api/songs/artwork/${encodeURIComponent(song.filename)}`;
+    const audioUrl = resolveApiUrl(`/api/songs/audio/${encodeURIComponent(song.filename)}`);
+    const coverUrl = resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
 
     audioEngine.src = audioUrl;
     audioEngine.load();
@@ -2759,7 +2810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let title = 'Music Studio';
     let artist = 'Local Library';
     let album = '';
-    let coverUrl = '/static/placeholder.svg';
+    let coverUrl = 'placeholder.svg';
 
     if (isOnlineStreaming && currentStreamMeta) {
       title = currentStreamMeta.title || title;

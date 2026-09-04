@@ -1609,6 +1609,22 @@ async def events_stream():
 # Mount Static Assets & Frontend
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+@app.get("/style.css")
+def serve_root_css():
+    return FileResponse(os.path.join(STATIC_DIR, "style.css"), media_type="text/css")
+
+@app.get("/app.js")
+def serve_root_js():
+    return FileResponse(os.path.join(STATIC_DIR, "app.js"), media_type="application/javascript")
+
+@app.get("/placeholder.svg")
+def serve_root_placeholder():
+    return FileResponse(os.path.join(STATIC_DIR, "placeholder.svg"), media_type="image/svg+xml")
+
+@app.get("/favicon.svg")
+def serve_root_favicon_svg():
+    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
+
 @app.get("/favicon.ico")
 def serve_favicon():
     fav_path = os.path.join(STATIC_DIR, "favicon.svg")
