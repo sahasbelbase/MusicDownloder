@@ -95,12 +95,11 @@ def main():
     def on_gui_ready():
         if sys.platform == "darwin":
             try:
-                import mac_notch
-                if mac_notch.has_hardware_notch():
-                    from PyObjCTools import AppHelper
-                    AppHelper.callAfter(mac_notch.init_mac_notch, port)
+                import mac_nowplaying
+                from PyObjCTools import AppHelper
+                AppHelper.callAfter(mac_nowplaying.init_now_playing, port)
             except Exception as e:
-                print(f"[DesktopApp] Mac notch notice: {e}")
+                print(f"[DesktopApp] Mac NowPlaying notice: {e}")
 
     if use_webview:
         try:
@@ -115,6 +114,33 @@ def main():
                 background_color="#0b0e14",
                 text_select=True
             )
+
+            # Background mode like Spotify: closing the window hides it so audio continues playing
+            if sys.platform == "darwin":
+                def on_closing():
+                    try:
+                        window.hide()
+                        return False
+                    except Exception:
+                        return True
+                window.events.closing += on_closing
+
+                try:
+                    from AppKit import NSApplication
+                    from Foundation import NSObject
+                    class AppReopenDelegate(NSObject):
+                        def applicationShouldHandleReopen_hasVisibleWindows_(self, app, flag):
+                            try:
+                                window.show()
+                                window.restore()
+                            except Exception:
+                                pass
+                            return True
+                    _dock_delegate = AppReopenDelegate.alloc().init()
+                    NSApplication.sharedApplication().setDelegate_(_dock_delegate)
+                except Exception:
+                    pass
+
             webview.start(on_gui_ready, debug=False)
         except Exception as e:
             print(f"Webview note: {e}. Falling back to default web browser.")

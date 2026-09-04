@@ -57,7 +57,13 @@ All installable and portable packages are available in this folder for easy shar
 
 **File to Share:**
 👉 [`MusicStudio-macOS.dmg`](file:///Users/sahas/Documents/Projects/spotifydownloder/releases/MusicStudio-macOS.dmg) (69 MB)  
-*(Architecture: Apple Silicon M1/M2/M3/M4/M5 • Minimum macOS: Big Sur 11.0+ • Version 3.3.0)*
+*(Architecture: Apple Silicon M1/M2/M3/M4/M5 • Minimum macOS: Big Sur 11.0+ • Version 3.4.0)*
+
+### Key Capabilities:
+- **🔒 macOS Lock Screen & Control Center**: Shows current song, artist, album art, and progress bar directly on the Mac Lock Screen and Control Center (just like Spotify and Apple Music).
+- **⌨️ Keyboard Fn Media Keys**: Full control with Mac keyboard keys—F7 (Previous), F8 (Play/Pause), and F9 (Next)—as well as Bluetooth headphones and AirPods.
+- **🏝️ Universal Third-Party Notch Support**: Seamlessly communicates via macOS's native `MPNowPlayingInfoCenter` / `MediaRemote` with any notch app you use (Boring.Notch, MediaMate, DynamicLake, NotchNook, BetterTouchTool, etc.).
+- **⚡ Background Audio**: Closing the window keeps music playing in the background without stopping. Click the Dock icon or press `⌘Tab` to bring the window right back. To quit, use `⌘Q`.
 
 ### How to Install on Mac:
 1. Double-click **`MusicStudio-macOS.dmg`** to mount the disk image.

@@ -1584,13 +1584,6 @@ def trigger_playback_action(req: PlaybackActionPayload):
     state.notify("playback_command", req.dict())
     return {"status": "command_dispatched", "action": req.action}
 
-@app.get("/notch_hud")
-def serve_notch_hud():
-    hud_path = os.path.join(STATIC_DIR, "notch_hud.html")
-    if os.path.isfile(hud_path):
-        return FileResponse(hud_path)
-    return HTMLResponse("<h1>Notch HUD</h1>")
-
 @app.get("/api/events")
 async def events_stream():
     queue = asyncio.Queue()

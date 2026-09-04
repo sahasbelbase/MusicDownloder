@@ -18,65 +18,6 @@
     <link rel="stylesheet" href="style.css?v=3.6.0" />
   </head>
   <body>
-    <!-- Mac Notch Music HUD / Dynamic Island -->
-    <div id="mac-notch-hud" class="mac-notch-hud hud-hidden" style="display: none;" aria-label="Mac Notch Music Player">
-      <!-- Collapsed Notch Island Pill -->
-      <div class="notch-pill" id="notch-pill" title="Mac Notch Player (Click to expand)">
-        <img id="notch-mini-art" class="notch-mini-art" src="placeholder.svg" alt="Notch Cover" />
-        <div class="notch-mini-info">
-          <span id="notch-mini-title" class="notch-mini-title">Music Studio</span>
-          <span id="notch-mini-artist" class="notch-mini-artist">Playing Local Music</span>
-        </div>
-        <div class="notch-waveform" id="notch-waveform">
-          <span class="wave-bar"></span>
-          <span class="wave-bar"></span>
-          <span class="wave-bar"></span>
-          <span class="wave-bar"></span>
-        </div>
-        <button id="notch-mini-play-btn" class="notch-mini-play-btn" title="Play / Pause">
-          <svg id="notch-mini-play-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </button>
-      </div>
-
-      <!-- Expanded Dynamic Island HUD -->
-      <div class="notch-expanded-island" id="notch-expanded-island">
-        <div class="notch-track-row">
-          <img id="notch-expanded-art" class="notch-expanded-art" src="placeholder.svg" alt="Album Art" />
-          <div class="notch-details">
-            <div id="notch-expanded-title" class="notch-expanded-title">Not Playing</div>
-            <div id="notch-expanded-artist" class="notch-expanded-artist">Select a song to start</div>
-          </div>
-          <button id="notch-fs-btn" class="notch-ctrl-btn" title="Open Fullscreen Player">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-          </button>
-        </div>
-
-        <!-- Notch Progress Scrubber -->
-        <div class="notch-scrub-bar">
-          <div class="notch-progress-track" id="notch-progress-track">
-            <div class="notch-progress-fill" id="notch-progress-fill" style="width: 0%;"></div>
-          </div>
-          <div class="notch-time-labels">
-            <span id="notch-curr-time" class="notch-curr-time">0:00</span>
-            <span id="notch-total-time" class="notch-total-time">0:00</span>
-          </div>
-        </div>
-
-        <!-- Notch Playback Controls -->
-        <div class="notch-ctrl-row">
-          <button id="notch-prev-btn" class="notch-ctrl-btn" title="Previous Track (←)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-          </button>
-          <button id="notch-play-btn" class="notch-ctrl-btn notch-play-btn-large" title="Play / Pause (Space)">
-            <svg id="notch-play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
-          <button id="notch-next-btn" class="notch-ctrl-btn" title="Next Track (→)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Subtle Ambient Backdrop Glows -->
     <div class="ambient-glow orb-emerald"></div>
     <div class="ambient-glow orb-violet"></div>
