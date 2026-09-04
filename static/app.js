@@ -3377,22 +3377,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (fsMinimizeBtn) fsMinimizeBtn.addEventListener('click', closeFullscreenPlayer);
+
+  // ONLY maximize fullscreen player when clicking the small cover or the max button
   if (playerExpandBtn) {
     playerExpandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openFullscreenPlayer();
     });
   }
-  if (dockTrackInfo) {
-    dockTrackInfo.addEventListener('click', () => {
+
+  const dockCoverWrap = document.getElementById('dock-cover-wrap') || document.querySelector('.dock-cover-wrap');
+  if (dockCoverWrap) {
+    dockCoverWrap.addEventListener('click', (e) => {
+      e.stopPropagation();
       openFullscreenPlayer();
     });
-  }
-  if (playerDock) {
-    playerDock.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-transport') || e.target.closest('.btn-play-pause') || e.target.closest('.dock-volume-col') || e.target.closest('input')) {
-        return;
-      }
+  } else if (playerCover) {
+    playerCover.addEventListener('click', (e) => {
+      e.stopPropagation();
       openFullscreenPlayer();
     });
   }
