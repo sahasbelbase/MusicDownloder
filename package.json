@@ -1,0 +1,29 @@
+{
+  "name": "spotifydownloder",
+  "version": "1.0.0",
+  "description": "A high-speed, rate-limit resistant music downloader and metadata tagging suite. Supports downloading full playlists, albums, and individual tracks from **Spotify**, **YouTube**, and **YouTube Music** with **320 kbps MP3 conversion**, clean song-title naming, and **1000×1000 Ultra-HD embedded cover artwork**.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sahasbelbase/MusicDownloder.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sahasbelbase/MusicDownloder/issues"
+  },
+  "homepage": "https://github.com/sahasbelbase/MusicDownloder#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1"
+  }
+}

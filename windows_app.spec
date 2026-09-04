@@ -41,6 +41,8 @@ hiddenimports = [
     'requests',
     'certifi',
     'webview',
+    'PIL',
+    'PIL.Image',
     'app',
     'download_playlist',
     'discovery',

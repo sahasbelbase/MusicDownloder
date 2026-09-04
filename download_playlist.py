@@ -19,20 +19,41 @@ import time
 import json
 import shutil
 import urllib.request
+from ssl_helper import safe_urlopen
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from typing import List, Dict, Optional, Tuple
 
 import mutagen
-from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TYER, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
+
+def set_macos_finder_icon(file_path: str, image_data: bytes) -> bool:
+    """Set native macOS Finder file icon on the MP3 file using AppKit."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        from AppKit import NSWorkspace, NSImage, NSData
+        nsdata = NSData.dataWithBytes_length_(image_data, len(image_data))
+        img = NSImage.alloc().initWithData_(nsdata)
+        if img:
+            return bool(NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, file_path, 0))
+    except Exception:
+        pass
+    return False
 
 def get_default_output_folder():
+    user_music = os.path.expanduser("~/Music/Music Studio")
+    local_songs = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
     if getattr(sys, 'frozen', False):
-        user_music = os.path.expanduser("~/Music/Music Studio")
         os.makedirs(user_music, exist_ok=True)
         return user_music
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
+    if os.path.isdir(user_music) and any(f.endswith('.mp3') for f in os.listdir(user_music)):
+        return user_music
+    if os.path.isdir(local_songs):
+        return local_songs
+    os.makedirs(user_music, exist_ok=True)
+    return user_music
 
 DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 DEFAULT_OUTPUT_FOLDER = get_default_output_folder()
@@ -183,7 +204,7 @@ def check_dependencies() -> str:
     return ffmpeg_bin
 
 class SpotifyExtractor:
-    """Extract tracks and metadata from Spotify URLs without requiring API credentials."""
+    """Extract tracks from Spotify URLs using public pagination (up to 1,000+ tracks) without requiring any API keys or login."""
     
     @staticmethod
     def is_spotify_url(url: str) -> bool:
@@ -202,11 +223,12 @@ class SpotifyExtractor:
         tracks = []
         collection_title = "Spotify Playlist"
 
+        # 1. Single Track
         if track_match:
             track_id = track_match.group(1)
             embed_url = f"https://open.spotify.com/embed/track/{track_id}"
             req = urllib.request.Request(embed_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with safe_urlopen(req, timeout=15) as resp:
                 html = resp.read().decode('utf-8')
             match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
             if match:
@@ -229,13 +251,118 @@ class SpotifyExtractor:
                 })
             return collection_title, tracks
 
+        # 2. Public Playlist with Full Pagination (No login / keys required)
+        if playlist_match:
+            playlist_id = playlist_match.group(1)
+            try:
+                from spotapi import PublicPlaylist
+                pl = PublicPlaylist(f"https://open.spotify.com/playlist/{playlist_id}")
+                
+                # Fetch metadata
+                first_info = pl.get_playlist_info(limit=25)
+                data_v2 = first_info.get('data', {}).get('playlistV2', {})
+                if data_v2:
+                    collection_title = data_v2.get('name') or "Spotify Playlist"
+                    images = data_v2.get('images', {}).get('items', [])
+                    cover_url = images[0].get('sources', [{}])[0].get('url', '') if images else ''
+                    
+                    track_idx = 1
+                    for chunk in pl.paginate_playlist():
+                        for item in chunk.get('items', []):
+                            t_data = item.get('itemV2', {}).get('data', {})
+                            if not t_data or t_data.get('__typename') != 'Track':
+                                continue
+                            t_title = t_data.get('name', '')
+                            if not t_title:
+                                continue
+                            artists_items = t_data.get('artists', {}).get('items', [])
+                            artist_names = [a.get('profile', {}).get('name', '') for a in artists_items if a.get('profile', {}).get('name')]
+                            t_artist = ', '.join(artist_names) if artist_names else 'Unknown Artist'
+                            album_data = t_data.get('albumOfTrack', {})
+                            album_name = album_data.get('name', collection_title)
+                            cover_sources = album_data.get('coverArt', {}).get('sources', [])
+                            track_cover = cover_sources[0].get('url', cover_url) if cover_sources else cover_url
+                            dur_ms = t_data.get('trackDuration', {}).get('totalMilliseconds', 0)
+                            dur_sec = dur_ms // 1000 if dur_ms else 0
+                            uri = t_data.get('uri', '')
+                            track_id = uri.split(':')[-1] if uri else ''
+                            tracks.append({
+                                'title': t_title,
+                                'artist': t_artist,
+                                'album': album_name,
+                                'cover_url': track_cover,
+                                'duration': dur_sec,
+                                'preview_url': '',
+                                'track_number': track_idx,
+                                'query': f"{t_artist} - {t_title} Official Audio",
+                                'spotify_url': f"https://open.spotify.com/track/{track_id}" if track_id else f"https://open.spotify.com/track/{track_idx}"
+                            })
+                            track_idx += 1
+                            
+                    if tracks:
+                        return collection_title, tracks
+            except Exception as e:
+                print(f"[SpotifyExtractor] Public playlist pagination notice: {e}. Trying embed fallback.")
+
+        # 3. Public Album with Pagination
+        if album_match:
+            album_id = album_match.group(1)
+            try:
+                from spotapi import PublicAlbum
+                alb = PublicAlbum(f"https://open.spotify.com/album/{album_id}")
+                
+                first_info = alb.get_album_info(limit=25)
+                data = first_info.get('data', {}).get('albumUnion', {})
+                if data:
+                    collection_title = data.get('name') or "Spotify Album"
+                    artists_items = data.get('artists', {}).get('items', [])
+                    album_artists = [a.get('profile', {}).get('name', '') for a in artists_items if a.get('profile', {}).get('name')]
+                    album_artist = ', '.join(album_artists) if album_artists else 'Unknown Artist'
+                    cover_sources = data.get('coverArt', {}).get('sources', [])
+                    cover_url = cover_sources[0].get('url', '') if cover_sources else ''
+                    
+                    track_idx = 1
+                    for chunk in alb.paginate_album():
+                        for item in chunk:
+                            t_data = item.get('track', {}) if isinstance(item, dict) else {}
+                            if not t_data:
+                                continue
+                            t_title = t_data.get('name', '')
+                            if not t_title:
+                                continue
+                            t_artists_items = t_data.get('artists', {}).get('items', [])
+                            t_artist_names = [a.get('profile', {}).get('name', '') for a in t_artists_items if a.get('profile', {}).get('name')]
+                            t_artist = ', '.join(t_artist_names) if t_artist_names else album_artist
+                            dur_ms = t_data.get('duration', {}).get('totalMilliseconds', 0)
+                            dur_sec = dur_ms // 1000 if dur_ms else 0
+                            uri = t_data.get('uri', '')
+                            track_id = uri.split(':')[-1] if uri else ''
+                            tracks.append({
+                                'title': t_title,
+                                'artist': t_artist,
+                                'album': collection_title,
+                                'cover_url': cover_url,
+                                'duration': dur_sec,
+                                'preview_url': '',
+                                'track_number': track_idx,
+                                'query': f"{t_artist} - {t_title} Official Audio",
+                                'spotify_url': f"https://open.spotify.com/track/{track_id}" if track_id else f"https://open.spotify.com/track/{track_idx}"
+                            })
+                            track_idx += 1
+                            
+                    if tracks:
+                        return collection_title, tracks
+            except Exception as e:
+                print(f"[SpotifyExtractor] Public album pagination notice: {e}. Trying embed fallback.")
+
+        # 4. Fallback: Embed scraping (if public GraphQL endpoint is unreachable)
         if playlist_match or album_match:
             entity_type = "playlist" if playlist_match else "album"
             entity_id = playlist_match.group(1) if playlist_match else album_match.group(1)
             embed_url = f"https://open.spotify.com/embed/{entity_type}/{entity_id}"
             
             req = urllib.request.Request(embed_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with safe_urlopen(req, timeout=15) as resp:
                 html = resp.read().decode('utf-8')
             
             match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
@@ -279,6 +406,7 @@ class YouTubeExtractor:
             'skip_download': True,
             'quiet': True,
             'no_warnings': True,
+            'nocheckcertificate': True,
         }
         
         tracks = []
@@ -375,57 +503,73 @@ def embed_id3_tags(file_path: str, track_info: Dict, enriched_metadata: Dict = N
         track_num = str(track_info.get('track_number', '1'))
 
         if title:
-            audio.add(TIT2(encoding=3, text=title))
+            audio.add(TIT2(encoding=1, text=title))
         if artist:
-            audio.add(TPE1(encoding=3, text=artist))
-            audio.add(TPE2(encoding=3, text=artist))  # Album Artist for Windows Explorer & macOS Finder
+            audio.add(TPE1(encoding=1, text=artist))
+            audio.add(TPE2(encoding=1, text=artist))  # Album Artist for Windows Explorer & macOS Finder
         if album:
-            audio.add(TALB(encoding=3, text=album))
+            audio.add(TALB(encoding=1, text=album))
         elif title:
-            audio.add(TALB(encoding=3, text=title))
-        if year and year.isdigit():
-            audio.add(TDRC(encoding=3, text=year))
+            audio.add(TALB(encoding=1, text=title))
+        if year and str(year).isdigit():
+            clean_year = str(year)[:4]
+            audio.add(TDRC(encoding=1, text=clean_year))
+            audio.add(TYER(encoding=1, text=clean_year))
         if genre:
-            audio.add(TCON(encoding=3, text=genre))
+            audio.add(TCON(encoding=1, text=genre))
         if collaborators:
             # TPE4 = involved people list
-            audio.add(TPE4(encoding=3, text=collaborators))
+            audio.add(TPE4(encoding=1, text=collaborators))
         if track_num and track_num.isdigit():
-            audio.add(TRCK(encoding=3, text=track_num))
+            audio.add(TRCK(encoding=1, text=track_num))
 
         # Prefer enriched artwork, fall back to track_info
         cover_url = enriched_metadata.get('artwork_url') if enriched_metadata else None
         if not cover_url:
             cover_url = track_info.get('cover_url')
         
-        if cover_url and cover_url.startswith('http'):
+        img_data = None
+        if cover_url:
             try:
-                req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    raw_data = resp.read()
+                raw_data = None
+                if cover_url.startswith('http'):
+                    req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
+                    with safe_urlopen(req, timeout=10) as resp:
+                        raw_data = resp.read()
+                elif os.path.isfile(cover_url):
+                    with open(cover_url, 'rb') as f:
+                        raw_data = f.read()
+
+                if raw_data:
                     import io
                     from PIL import Image
                     try:
-                        # Convert to baseline RGB JPEG for 100% universal OS compatibility (macOS Finder & Windows Explorer)
+                        # Convert to baseline RGB JPEG for universal compatibility (Windows Explorer & macOS Finder)
                         pil_img = Image.open(io.BytesIO(raw_data)).convert('RGB')
+                        pil_img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
                         buf = io.BytesIO()
-                        pil_img.save(buf, format='JPEG', quality=95, optimize=True)
+                        pil_img.save(buf, format='JPEG', quality=95, progressive=False)
                         img_data = buf.getvalue()
                     except Exception:
                         img_data = raw_data
 
                     audio.delall('APIC')
                     audio.add(APIC(
-                        encoding=3,
+                        encoding=0,
                         mime="image/jpeg",
                         type=3,
-                        desc="Cover",
+                        desc="",
                         data=img_data
                     ))
             except Exception:
                 pass
 
-        audio.save(file_path, v2_version=3)
+        # Save universal ID3v2.3 + ID3v1 tags for Windows Explorer, macOS Finder, and all legacy players
+        audio.save(file_path, v2_version=3, v1=2)
+
+        # Set macOS Finder file icon if on Darwin
+        if img_data:
+            set_macos_finder_icon(file_path, img_data)
     except Exception as e:
         log(f"⚠️ Warning embedding ID3 tags into {os.path.basename(file_path)}: {e}", Colors.YELLOW)
 

@@ -98,6 +98,8 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .monospace {
@@ -797,6 +799,10 @@ body {
   transition: var(--transition);
   cursor: pointer;
   position: relative;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .song-card:hover {
   transform: translateY(-4px);
@@ -858,15 +864,30 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 .song-card-title {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .song-card-artist {
   font-size: 0.76rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .song-card-tags {
   display: flex;
@@ -1709,16 +1730,30 @@ input[type="range"]:hover::-webkit-slider-thumb {
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .album-card-title {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .album-card-artist {
   font-size: 0.8rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .album-card-meta {
   font-size: 0.72rem;
@@ -1883,16 +1918,30 @@ input[type="range"]:hover::-webkit-slider-thumb {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 .playlist-card-title {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .playlist-card-subtitle {
   font-size: 0.76rem;
   color: var(--text-secondary);
   line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Explore Songs Grid / Trending List */
@@ -1949,15 +1998,28 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .explore-song-info {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 .explore-song-title {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .explore-song-artist {
   font-size: 0.76rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .explore-song-meta {
   font-size: 0.7rem;
@@ -2414,6 +2476,8 @@ input[type="range"]:hover::-webkit-slider-thumb {
 }
 .song-card {
   padding: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 .song-card-art-wrap {
   margin-bottom: 8px;
@@ -2422,9 +2486,21 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .song-card-title {
   font-size: 0.92rem;
   margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .song-card-artist {
   font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Group Cards: Artist, Album, Genre */
@@ -2487,11 +2563,22 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: var(--text-primary);
   margin-bottom: 4px;
   width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 .group-sub {
   font-size: 0.78rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 /* Dock Expand Button & Trigger */
@@ -3869,6 +3956,543 @@ input[type="range"]:hover::-webkit-slider-thumb {
     grid-template-columns: 1fr;
     justify-items: center;
   }
+}
+
+/* ==========================================================================
+   MAC NOTCH & DYNAMIC ISLAND HUD
+   ========================================================================== */
+.mac-notch-hud {
+  display: none !important;
+}
+
+.mac-notch-hud.hud-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-100%);
+  pointer-events: none;
+}
+
+/* Base Island Body */
+.notch-pill {
+  background: #000000;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  overflow: hidden;
+  height: 34px;
+  min-width: 175px;
+  max-width: 260px;
+  padding: 0 10px;
+  gap: 8px;
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Collapsed Pill Elements */
+.notch-mini-art {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+.notch-mini-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.notch-mini-title {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.notch-mini-artist {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Audio Waveform Bars */
+.notch-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 14px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.notch-waveform .wave-bar {
+  width: 2.5px;
+  height: 6px;
+  background: var(--emerald);
+  border-radius: 2px;
+  transition: height 0.2s ease;
+}
+
+.mac-notch-hud.is-playing .wave-bar:nth-child(1) {
+  animation: notchWave 0.75s ease-in-out infinite alternate;
+}
+.mac-notch-hud.is-playing .wave-bar:nth-child(2) {
+  animation: notchWave 0.6s ease-in-out infinite alternate 0.15s;
+}
+.mac-notch-hud.is-playing .wave-bar:nth-child(3) {
+  animation: notchWave 0.9s ease-in-out infinite alternate 0.3s;
+}
+.mac-notch-hud.is-playing .wave-bar:nth-child(4) {
+  animation: notchWave 0.7s ease-in-out infinite alternate 0.1s;
+}
+
+@keyframes notchWave {
+  0% { height: 4px; }
+  100% { height: 14px; }
+}
+
+/* Mini Play Button */
+.notch-mini-play-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+.notch-mini-play-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1);
+}
+
+/* Expanded Dynamic Island HUD */
+.notch-expanded-island {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-120%);
+  background: rgba(10, 10, 12, 0.96);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: none;
+  border-bottom-left-radius: 26px;
+  border-bottom-right-radius: 26px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 1px rgba(255, 255, 255, 0.25);
+  width: 360px;
+  max-width: 92vw;
+  padding: 14px 18px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100001;
+}
+
+/* Hover or Active Expanded State */
+.mac-notch-hud:hover .notch-expanded-island,
+.mac-notch-hud.is-expanded .notch-expanded-island {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.mac-notch-hud:hover .notch-pill,
+.mac-notch-hud.is-expanded .notch-pill {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+
+/* Expanded Top Bar */
+.notch-track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notch-expanded-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notch-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.notch-expanded-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+  letter-spacing: -0.01em;
+}
+
+.notch-expanded-artist {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Expanded Progress Bar */
+.notch-scrub-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notch-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+
+.notch-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--emerald) 0%, var(--cyan) 100%);
+  border-radius: 4px;
+  transition: width 0.15s linear;
+}
+
+.notch-time-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Expanded Controls */
+.notch-ctrl-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-top: 2px;
+}
+
+.notch-ctrl-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+.notch-ctrl-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.08);
+}
+.notch-ctrl-btn:active {
+  transform: scale(0.94);
+}
+
+.notch-play-btn-large {
+  background: #ffffff !important;
+  color: #000000 !important;
+  width: 38px;
+  height: 38px;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.3);
+}
+.notch-play-btn-large:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.45);
+}
+
+/* ==========================================================================
+   IMPORT PLAYLIST BUTTON & MODAL
+   ========================================================================== */
+.btn-import-playlist-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #e2e8f0;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-import-playlist-trigger:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%);
+  border-color: rgba(168, 85, 247, 0.6);
+  transform: translateY(-1px);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.25);
+}
+
+.import-playlist-window {
+  width: 490px;
+  max-width: 95vw;
+  padding: 28px;
+}
+
+.import-playlist-header {
+  margin-bottom: 20px;
+}
+
+.import-platform-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.badge-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-spotify {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1ed760;
+  border: 1px solid rgba(29, 185, 84, 0.35);
+}
+
+.badge-ytm {
+  background: rgba(255, 0, 0, 0.12);
+  color: #ff4e45;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.url-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.url-input-wrap input {
+  flex: 1;
+}
+
+.btn-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+.btn-paste:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--border-hover);
+}
+
+.import-status-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-md);
+  margin-top: 14px;
+}
+
+.import-status-box.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.import-status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#import-status-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+#import-status-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.import-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid rgba(16, 185, 129, 0.2);
+  border-top-color: var(--emerald);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.import-status-box.error .import-spinner {
+  display: none;
+}
+
+/* ==================== OFFLINE MODE STYLES ==================== */
+.offline-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease forwards;
+  z-index: 100;
+  margin: 0 auto;
+}
+
+.offline-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+  animation: pulseAmber 2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes pulseAmber {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.6;
+  }
+}
+
+.offline-pill-text {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #fef3c7;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Disabled offline navigation items */
+.nav-item.tab-offline-disabled,
+.mobile-nav-item.tab-offline-disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.85);
+  position: relative;
+  pointer-events: auto;
+}
+
+.nav-item.tab-offline-disabled:hover,
+.mobile-nav-item.tab-offline-disabled:hover {
+  background: transparent !important;
+  transform: none !important;
+}
+
+/* ==================== MOST PLAYED STYLES ==================== */
+.group-pill[data-group="most_played"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: rgba(249, 115, 22, 0.25);
+}
+
+.group-pill[data-group="most_played"]:hover {
+  border-color: rgba(249, 115, 22, 0.5);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.group-pill[data-group="most_played"].active {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(239, 68, 68, 0.25)) !important;
+  border-color: rgba(249, 115, 22, 0.7) !important;
+  color: #ffedd5 !important;
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.3) !important;
+}
+
+.playlist-badge-smart {
+  background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
+}
+
+.playlist-card.smart-card {
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.playlist-card.smart-card:hover {
+  border-color: rgba(249, 115, 22, 0.65);
+  box-shadow: 0 10px 30px rgba(249, 115, 22, 0.2);
+}
+
+.play-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  padding: 2px 7px;
+  border-radius: 9999px;
+  margin-left: 6px;
 }
 
 

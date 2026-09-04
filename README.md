@@ -1,20 +1,50 @@
-# MusicDownloader 🎵
+# Music Studio 🎵 — Universal Music Downloader & Player
 
-A high-speed, rate-limit resistant music downloader and metadata tagging suite. Supports downloading full playlists, albums, and individual tracks from **Spotify**, **YouTube**, and **YouTube Music** with **320 kbps MP3 conversion**, clean song-title naming, and **1000×1000 Ultra-HD embedded cover artwork**.
+A high-speed, rate-limit resistant music downloader, audio tagger, and full-featured music player available across **Web**, **macOS**, **Windows**, **Android**, and **iPhone (iOS)**.
 
-Includes both a **modern Web UI Studio** with real-time SSE progress streaming and an advanced **CLI Engine**.
+Supports downloading full playlists, albums, and tracks from **Spotify**, **YouTube**, and **YouTube Music** with **320 kbps MP3 conversion**, clean song-title formatting, and **1000×1000 Ultra-HD embedded cover artwork**—with **zero Spotify credentials required**.
 
 ---
 
-## ✨ Features
+## 📦 Ready-to-Install Downloads
 
-- **🚀 Zero Rate Limits & High Speed**: Bypasses API throttling and bot blocks using direct stream extractors with multi-threaded downloads (2–6 concurrent workers).
-- **🎧 True 320 kbps MP3 Audio**: Transcodes high-bitrate source audio directly via FFmpeg.
-- **🏷️ Clean Song Titles**: Automatically detects and removes unwanted video suffixes such as `(Official Video)`, `[Official Lyric Video]`, `[4K]`, `Remastered`, etc., saving pure song names (`Title.mp3`).
-- **🎨 Full ID3v2.3 Metadata & Studio Artwork**: Embeds clean Song Title, Artist, Album Name, Year, Genre, and 1000×1000 HD Cover Art directly into the MP3 tags for seamless Apple Music, iTunes, Spotify Local Files, and Car audio compatibility.
-- **⚡ Smart Resume**: Automatically detects and skips songs that have already been downloaded in `<0.01s`.
-- **🔄 Latest Songs First**: Processes playlists in reverse order so your most recently added favorite tracks download first.
-- **💻 Modern Web UI Studio**: Interactive glassmorphism dashboard with live download feed, real-time metrics, music library browser, and in-browser audio player.
+| Platform | Package | Size | Details |
+| :--- | :--- | :--- | :--- |
+| 📱 **Android** | [**`MusicStudio.apk`**](releases/MusicStudio.apk) | 4.0 MB | Universal APK (Android 7.0+ / API 24–36), background audio playback |
+| 🍏 **macOS** | [**`MusicStudio-macOS.dmg`**](releases/MusicStudio-macOS.dmg) | 69 MB | Apple Silicon (M1/M2/M3/M4/M5), native Mac Notch Dynamic Island HUD |
+| 🍎 **iPhone (iOS)** | [**`MusicStudio-iOS.zip`**](releases/MusicStudio-iOS.zip) | 216 KB | Native Xcode project, iOS 14.0+, background audio & LAN streaming |
+| 🪟 **Windows** | [**`MusicStudio-Windows-x64.zip`**](releases/MusicStudio-Windows-x64.zip) | 257 KB | Portable package with standalone [`MusicStudio.exe`](releases/MusicStudio.exe) |
+
+> 📖 **Detailed Installation Instructions**: Read the [**Releases Guide**](releases/README.md) for step-by-step setup on every platform.
+
+---
+
+## ✨ Key Features
+
+### 🎧 Built-in Music Player
+- **High-Fidelity Audio Engine**: Crisp local playback with live scrubbing, time remaining, volume boost, shuffle, and repeat modes.
+- **Dock & Fullscreen Player**: Minimized floating dock player with quick controls, expandable into an immersive glassmorphism fullscreen visualizer with album art glow.
+- **Queue & Playlist Management**: Create custom playlists, reorder songs, and favorite tracks on the fly.
+
+### ⚡ Automatic Offline Detection (Library Only Mode)
+- **Zero-Disruption Offline Mode**: Automatically detects when your device loses internet connectivity or switches to Airplane Mode.
+- **Library Focus**: Seamlessly restricts navigation to your downloaded **Library**, hiding the Downloader and Discover tabs and displaying an `⚡ Offline Mode • Library Only` indicator pill.
+- **Instant Resume**: Restores full Discover and Downloader tabs the moment network connectivity returns.
+
+### 🔥 "Most Played" (Top 100) Smart Playlist
+- **Intelligent Habit Tracking**: Tracks every song played for 15+ seconds or to completion, recording play counts and timestamps in real time.
+- **Dynamic Top 100 Chart**: Automatically generates a dedicated, delete-protected smart playlist featuring your 100 most played tracks.
+- **Local & Server Sync**: Persists listening history across both browser `localStorage` and local backend storage.
+
+### 📥 Rate-Limit Resistant Downloader
+- **Zero Spotify Credentials**: Downloads public Spotify playlists of **1,000+ tracks** using resilient paginated scrapers—no Spotify Developer Client ID or Secret needed.
+- **True 320 kbps MP3 Conversion**: Direct audio transcoding via multi-threaded FFmpeg pipelines (2–6 parallel workers).
+- **Clean Song Titles**: Automatically purges video tags like `(Official Video)`, `[Lyrics]`, `[4K]`, and `Remastered` into pristine song names.
+- **Studio Metadata & 1000×1000 HD Artwork**: Integrates with Apple Music to embed official ID3v2.3 tags (artist, album, release year, genre, and HD cover art) into every file for car displays, Apple Music, and iTunes.
+
+### 🏝️ Mac Notch Dynamic Island HUD
+- **Hardware Notch Integration**: On MacBook Pro models with display notches (M1/M2/M3/M4/M5), hovering over the physical screen notch reveals an interactive Dynamic Island HUD.
+- **Live Controls**: Inspect the active track artwork, title, and artist, scrub through audio, and toggle play/pause directly from the notch.
 
 ---
 
@@ -22,81 +52,78 @@ Includes both a **modern Web UI Studio** with real-time SSE progress streaming a
 
 1. **Python 3.8+**
 2. **FFmpeg** (Required for audio conversion and metadata embedding)
-   - **macOS** (via Homebrew):
-     ```bash
-     brew install ffmpeg
-     ```
-   - **Linux (Ubuntu/Debian)**:
-     ```bash
-     sudo apt update && sudo apt install ffmpeg
-     ```
-   - **Windows**:
-     Download from [gyan.dev/ffmpeg](https://www.gyan.dev/ffmpeg/builds/) or install via `winget install Gyan.FFmpeg`.
-
----
-
-## 📦 Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/sahasbelbase/MusicDownloder.git
-   cd MusicDownloder
-   ```
-
-2. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   # Or install directly:
-   pip install yt-dlp mutagen fastapi uvicorn requests
-   ```
+   - **macOS** (Homebrew): `brew install ffmpeg`
+   - **Linux (Ubuntu/Debian)**: `sudo apt update && sudo apt install ffmpeg`
+   - **Windows**: `winget install Gyan.FFmpeg` or download from [gyan.dev/ffmpeg](https://www.gyan.dev/ffmpeg/builds/)
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Launch the Web UI Studio (Recommended)
-
-Start the local web application:
+### 1. Launch the Local Web Studio
 ```bash
+# Clone the repository
+git clone https://github.com/sahasbelbase/MusicDownloder.git
+cd MusicDownloder
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start the server
 python3 app.py
 ```
 Open **[http://localhost:5000](http://localhost:5000)** in your browser.
 
-- **Hero URL Input**: Paste any Spotify or YouTube Music link.
-- **Live Stream**: Watch songs download with live album art and progress bars.
-- **Music Library**: Browse, search, and play your downloaded songs directly in the browser.
-- **Enrich Studio Metadata**: 1-click button to fetch official studio albums, release years, and HD art from Apple Music.
+---
+
+### 2. Standalone Desktop Applications
+
+#### macOS App with Notch Dynamic Island HUD:
+```bash
+python3 desktop_app.py
+```
+Or mount and run [**`releases/MusicStudio-macOS.dmg`**](releases/MusicStudio-macOS.dmg).
+
+#### Windows Launcher:
+Double-click [**`releases/MusicStudio.exe`**](releases/MusicStudio.exe) or extract [**`releases/MusicStudio-Windows-x64.zip`**](releases/MusicStudio-Windows-x64.zip).
 
 ---
 
-### 2. Command-Line (CLI) Downloader
+### 3. Mobile Apps (Android & iOS)
+
+#### Android:
+Install [**`releases/MusicStudio.apk`**](releases/MusicStudio.apk) on your Android device.
+
+To build from source:
+```bash
+npm install
+npx cap copy android
+cd android && ./gradlew assembleDebug
+```
+
+#### iPhone & iOS:
+Extract [**`releases/MusicStudio-iOS.zip`**](releases/MusicStudio-iOS.zip), open `ios/App/App.xcodeproj` in **Xcode**, select your connected iPhone, and click **Run**.
+
+---
+
+### 4. Command-Line (CLI) Downloader
 
 #### Download a Playlist (Default: 3 threads, latest songs first):
 ```bash
 python3 download_playlist.py "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 ```
 
-#### Download with 4 Parallel Streams:
+#### Download a Spotify Playlist or Album:
 ```bash
-python3 download_playlist.py "YOUR_PLAYLIST_URL" --threads 4
+python3 download_playlist.py "https://open.spotify.com/playlist/YOUR_PLAYLIST_ID" --threads 4
 ```
 
-#### Download a Spotify Playlist or Track:
+#### Download only the Top 25 Newest Songs:
 ```bash
-python3 download_playlist.py "https://open.spotify.com/playlist/YOUR_PLAYLIST_ID"
+python3 download_playlist.py --limit 25
 ```
 
-#### Download only the Top 20 Newest Songs:
-```bash
-python3 download_playlist.py --limit 20
-```
-
----
-
-### 3. Metadata & HD Cover Art Enricher
-
-To scan existing downloaded songs and enrich them with official Apple Music studio album names, release years, genres, and 1000×1000 HD cover artwork:
-
+#### Enrich Existing MP3s with HD Apple Music Artwork:
 ```bash
 python3 fix_metadata.py
 ```
@@ -121,16 +148,28 @@ python3 fix_metadata.py
 
 ```
 MusicDownloder/
-├── app.py                 # FastAPI backend server with real-time SSE streaming
-├── download_playlist.py   # Core download and stream extraction engine
-├── fix_metadata.py        # Apple Music studio metadata and HD artwork tagger
-├── requirements.txt       # Python package dependencies
-├── architecture.md        # Technical architecture and pipeline documentation
-├── static/                # Web UI frontend assets
-│   ├── index.html         # Modern HTML5 dashboard
-│   ├── style.css          # Dark glassmorphic styling
-│   └── app.js             # SSE real-time client & audio player engine
-└── Songs/                 # Output directory for downloaded MP3s
+├── app.py                 # FastAPI backend server with SSE streaming & play stats
+├── desktop_app.py         # macOS/Windows native desktop GUI window launcher
+├── mac_notch.py           # Hardware Mac notch Dynamic Island HUD controller
+├── discovery.py           # Spotify & YouTube Music public paginated scraper
+├── download_playlist.py   # Multi-threaded download and stream conversion engine
+├── fix_metadata.py        # Apple Music studio metadata and 1000x1000 HD art tagger
+├── ssl_helper.py          # Universal SSL certificate verification helper
+├── static/                # Responsive glassmorphism frontend application
+│   ├── index.html         # Modern web/mobile dashboard
+│   ├── style.css          # Responsive styling (desktop, tablet, mobile safe-areas)
+│   ├── app.js             # Player engine, SSE client, offline detection & stats
+│   └── notch_hud.html     # Mac Notch Dynamic Island HUD interface
+├── android/               # Native Android Capacitor 8 project
+├── ios/                   # Native iOS Capacitor 8 Xcode project
+├── releases/              # Compiled distributables (APK, DMG, iOS zip, Windows zip/exe)
+│   ├── README.md          # Multi-platform installation & sharing guide
+│   ├── MusicStudio.apk    # Android release APK (4.0 MB)
+│   ├── MusicStudio-macOS.dmg # Apple Silicon disk image (69 MB)
+│   ├── MusicStudio-iOS.zip   # Xcode iPhone project package
+│   ├── MusicStudio-Windows-x64.zip # Portable Windows distribution
+│   └── MusicStudio.exe    # Windows GUI launcher executable
+└── Songs/                 # Output folder for downloaded 320kbps MP3s
 ```
 
 ---

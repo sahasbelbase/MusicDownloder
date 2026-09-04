@@ -51,10 +51,20 @@ hiddenimports = [
     'certifi',
     'webview',
     'webview.platforms.cocoa',
+    'PIL',
+    'PIL.Image',
+    'AppKit',
+    'Foundation',
     'app',
     'download_playlist',
     'discovery',
     'fix_metadata',
+    'ssl_helper',
+    'mac_notch',
+    'WebKit',
+    'PyObjCTools',
+    'PyObjCTools.AppHelper',
+    'spotapi',
 ]
 
 a = Analysis(

@@ -21,6 +21,7 @@ import time
 import json
 import urllib.request
 import urllib.parse
+from ssl_helper import safe_urlopen
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -28,8 +29,22 @@ from typing import Optional, Dict, Tuple
 from difflib import SequenceMatcher
 
 import mutagen
-from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TCON, APIC, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TDRC, TYER, TCON, APIC, ID3NoHeaderError
 from mutagen.easyid3 import EasyID3
+
+def set_macos_finder_icon(file_path: str, image_data: bytes) -> bool:
+    """Set native macOS Finder file icon on the MP3 file using AppKit."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        from AppKit import NSWorkspace, NSImage, NSData
+        nsdata = NSData.dataWithBytes_length_(image_data, len(image_data))
+        img = NSImage.alloc().initWithData_(nsdata)
+        if img:
+            return bool(NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, file_path, 0))
+    except Exception:
+        pass
+    return False
 
 DEFAULT_SONGS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
 DEFAULT_THREADS = 4
@@ -201,7 +216,7 @@ def fetch_itunes_metadata(artist: str, title: str) -> Optional[Dict]:
                     url,
                     headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                with safe_urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     results = data.get('results', [])
                     if results:
@@ -310,47 +325,54 @@ def process_file(file_path: str, upgrade_artwork: bool = True, force: bool = Fal
         return 'skipped_fuzzy', filename, f"Fuzzy rejected: \"{meta.get('title')}\" by {meta.get('artist')} (score: {effective_score:.0%})"
 
     try:
-        # Update Title, Artist, Album, Year, Genre
+        # Update Title, Artist, Album, Year, Genre using standard ID3v2.3 UTF-16
         if meta.get('title'):
-            audio.add(TIT2(encoding=3, text=meta['title']))
+            audio.add(TIT2(encoding=1, text=meta['title']))
         if meta.get('artist'):
-            audio.add(TPE1(encoding=3, text=meta['artist']))
-            audio.add(TPE2(encoding=3, text=meta['artist']))  # Album Artist for Windows Explorer & macOS Finder
+            audio.add(TPE1(encoding=1, text=meta['artist']))
+            audio.add(TPE2(encoding=1, text=meta['artist']))  # Album Artist for Windows Explorer & macOS Finder
         if meta.get('album'):
-            audio.add(TALB(encoding=3, text=meta['album']))
+            audio.add(TALB(encoding=1, text=meta['album']))
         if meta.get('year') and str(meta['year']).isdigit():
-            audio.add(TDRC(encoding=3, text=str(meta['year'])))
+            clean_year = str(meta['year'])[:4]
+            audio.add(TDRC(encoding=1, text=clean_year))
+            audio.add(TYER(encoding=1, text=clean_year))
         if meta.get('genre'):
-            audio.add(TCON(encoding=3, text=meta['genre']))
+            audio.add(TCON(encoding=1, text=meta['genre']))
 
+        img_data = None
         # Upgrade artwork to 1000x1000 HD baseline JPEG
         if upgrade_artwork and meta.get('artwork_url'):
             try:
-                req = urllib.request.Request(meta['artwork_url'], headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=8) as resp:
+                req = urllib.request.Request(meta['artwork_url'], headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
+                with safe_urlopen(req, timeout=8) as resp:
                     raw_data = resp.read()
                     import io
                     from PIL import Image
                     try:
                         pil_img = Image.open(io.BytesIO(raw_data)).convert('RGB')
+                        pil_img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
                         buf = io.BytesIO()
-                        pil_img.save(buf, format='JPEG', quality=95, optimize=True)
+                        pil_img.save(buf, format='JPEG', quality=95, progressive=False)
                         img_data = buf.getvalue()
                     except Exception:
                         img_data = raw_data
 
                     audio.delall('APIC')
                     audio.add(APIC(
-                        encoding=3,
+                        encoding=0,
                         mime="image/jpeg",
                         type=3,
-                        desc="Cover",
+                        desc="",
                         data=img_data
                     ))
             except Exception:
                 pass
 
-        audio.save(file_path, v2_version=3)
+        audio.save(file_path, v2_version=3, v1=2)
+
+        if img_data:
+            set_macos_finder_icon(file_path, img_data)
 
         details = f"{meta.get('album', '')} ({meta.get('year', '')}) [{meta.get('genre', '')}] — match: {effective_score:.0%}"
         add_to_report("updated", {

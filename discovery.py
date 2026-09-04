@@ -8,6 +8,7 @@ import json
 import time
 import urllib.request
 import urllib.parse
+from ssl_helper import safe_urlopen
 from typing import List, Dict, Optional, Tuple
 from download_playlist import SpotifyExtractor
 
@@ -32,7 +33,7 @@ def _set_cache(key: str, data: any):
 def _fetch_json(url: str, timeout: int = 10) -> Optional[Dict]:
     try:
         req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with safe_urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8'))
     except Exception as e:
         print(f"[Discovery] Error fetching {url}: {e}")

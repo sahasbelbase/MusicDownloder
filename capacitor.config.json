@@ -1,0 +1,16 @@
+{
+  "appId": "com.musicstudio.app",
+  "appName": "Music Studio",
+  "webDir": "static",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "ios": {
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

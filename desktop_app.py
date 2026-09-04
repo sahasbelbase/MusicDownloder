@@ -30,6 +30,7 @@ except Exception:
         sys.stderr = open(os.devnull, 'w')
 
 import uvicorn
+import ssl_helper  # Configure CA certificates & SSL bypass globally
 from app import app, SONGS_DIR
 
 def find_available_port(default_port=5050):
@@ -91,6 +92,16 @@ def main():
     if "--browser" in sys.argv:
         use_webview = False
 
+    def on_gui_ready():
+        if sys.platform == "darwin":
+            try:
+                import mac_notch
+                if mac_notch.has_hardware_notch():
+                    from PyObjCTools import AppHelper
+                    AppHelper.callAfter(mac_notch.init_mac_notch, port)
+            except Exception as e:
+                print(f"[DesktopApp] Mac notch notice: {e}")
+
     if use_webview:
         try:
             import webview
@@ -104,7 +115,7 @@ def main():
                 background_color="#0b0e14",
                 text_select=True
             )
-            webview.start(debug=False)
+            webview.start(on_gui_ready, debug=False)
         except Exception as e:
             print(f"Webview note: {e}. Falling back to default web browser.")
             webbrowser.open(url)

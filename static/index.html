@@ -19,59 +19,59 @@
   </head>
   <body>
     <!-- Mac Notch Music HUD / Dynamic Island -->
-    <div id="mac-notch-hud" class="mac-notch-hud" aria-label="Mac Notch Music Player">
-      <!-- Collapsed Notch Island -->
-      <div class="notch-island-collapsed" id="notch-collapsed" title="Mac Notch Player (Click to expand)">
-        <div class="notch-thumb-wrap">
-          <img id="notch-thumb" src="/static/placeholder.svg" alt="Notch Cover" />
+    <div id="mac-notch-hud" class="mac-notch-hud hud-hidden" aria-label="Mac Notch Music Player">
+      <!-- Collapsed Notch Island Pill -->
+      <div class="notch-pill" id="notch-pill" title="Mac Notch Player (Click to expand)">
+        <img id="notch-mini-art" class="notch-mini-art" src="/static/placeholder.svg" alt="Notch Cover" />
+        <div class="notch-mini-info">
+          <span id="notch-mini-title" class="notch-mini-title">Music Studio</span>
+          <span id="notch-mini-artist" class="notch-mini-artist">Playing Local Music</span>
         </div>
-        <div class="notch-mini-info truncate">
-          <span id="notch-mini-title" class="truncate">Music Studio</span>
+        <div class="notch-waveform" id="notch-waveform">
+          <span class="wave-bar"></span>
+          <span class="wave-bar"></span>
+          <span class="wave-bar"></span>
+          <span class="wave-bar"></span>
         </div>
-        <div class="notch-wave-bars" id="notch-wave">
-          <span class="notch-bar"></span>
-          <span class="notch-bar"></span>
-          <span class="notch-bar"></span>
-          <span class="notch-bar"></span>
-        </div>
+        <button id="notch-mini-play-btn" class="notch-mini-play-btn" title="Play / Pause">
+          <svg id="notch-mini-play-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
       </div>
 
-      <!-- Expanded Dynamic Island -->
-      <div class="notch-island-expanded" id="notch-expanded">
-        <div class="notch-expanded-top">
-          <img id="notch-art-large" class="notch-art-large" src="/static/placeholder.svg" alt="Album Art" />
-          <div class="notch-track-details truncate">
-            <div id="notch-large-title" class="notch-large-title truncate">Not Playing</div>
-            <div id="notch-large-artist" class="notch-large-artist truncate">Select a song to start</div>
-            <div id="notch-large-album" class="notch-large-album truncate">Music Studio</div>
+      <!-- Expanded Dynamic Island HUD -->
+      <div class="notch-expanded-island" id="notch-expanded-island">
+        <div class="notch-track-row">
+          <img id="notch-expanded-art" class="notch-expanded-art" src="/static/placeholder.svg" alt="Album Art" />
+          <div class="notch-details">
+            <div id="notch-expanded-title" class="notch-expanded-title">Not Playing</div>
+            <div id="notch-expanded-artist" class="notch-expanded-artist">Select a song to start</div>
           </div>
-          <button id="notch-collapse-btn" class="notch-btn-icon" title="Collapse Notch">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+          <button id="notch-fs-btn" class="notch-ctrl-btn" title="Open Fullscreen Player">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
           </button>
         </div>
 
-        <!-- Notch Progress Bar -->
-        <div class="notch-progress-row">
-          <span id="notch-cur-time" class="notch-time">0:00</span>
-          <div class="notch-scrubber-track" id="notch-scrubber-track">
-            <div class="notch-scrubber-fill" id="notch-scrubber-fill" style="width: 0%;"></div>
+        <!-- Notch Progress Scrubber -->
+        <div class="notch-scrub-bar">
+          <div class="notch-progress-track" id="notch-progress-track">
+            <div class="notch-progress-fill" id="notch-progress-fill" style="width: 0%;"></div>
           </div>
-          <span id="notch-total-time" class="notch-time">0:00</span>
+          <div class="notch-time-labels">
+            <span id="notch-curr-time" class="notch-curr-time">0:00</span>
+            <span id="notch-total-time" class="notch-total-time">0:00</span>
+          </div>
         </div>
 
-        <!-- Notch Controls -->
-        <div class="notch-controls-row">
+        <!-- Notch Playback Controls -->
+        <div class="notch-ctrl-row">
           <button id="notch-prev-btn" class="notch-ctrl-btn" title="Previous Track (←)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
-          <button id="notch-play-btn" class="notch-play-btn" title="Play / Pause (Space)">
-            <svg id="notch-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <button id="notch-play-btn" class="notch-ctrl-btn notch-play-btn-large" title="Play / Pause (Space)">
+            <svg id="notch-play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           </button>
           <button id="notch-next-btn" class="notch-ctrl-btn" title="Next Track (→)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-          </button>
-          <button id="notch-fs-btn" class="notch-ctrl-btn" title="Open Fullscreen Player">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
           </button>
         </div>
       </div>
@@ -131,6 +131,12 @@
             <span>Settings</span>
           </button>
         </nav>
+
+        <!-- Ambient Offline Status Pill -->
+        <div id="offline-mode-pill" class="offline-mode-pill" style="display: none;">
+          <span class="offline-indicator-dot"></span>
+          <span class="offline-pill-text">⚡ Offline Mode • Library Only</span>
+        </div>
 
         <!-- Right Quick Actions -->
         <div class="nav-actions">
@@ -380,6 +386,10 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>
                   <span>Playlists</span>
                 </button>
+                <button class="group-pill" data-group="most_played" id="group-pill-most-played">
+                  <span class="group-pill-icon-emoji">🔥</span>
+                  <span>Most Played</span>
+                </button>
               </div>
 
               <!-- Sort Dropdown -->
@@ -402,6 +412,14 @@
                   <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
                 <span>New Playlist</span>
+              </button>
+              <button class="btn-import-playlist-trigger" id="btn-import-playlist" title="Import from Spotify or YouTube Music">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Import Playlist</span>
               </button>
               <div class="view-switch" id="view-switch-wrap">
                 <button class="view-toggle-btn active" id="view-grid-btn" title="Grid View">
@@ -499,6 +517,34 @@
                 <option value="title" selected>Song Title Only</option>
                 <option value="artist-title">Artist - Song Title</option>
               </select>
+            </div>
+
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">📱</div>
+                <div>
+                  <h4>Mobile & Server Connection</h4>
+                  <p>Server URL for mobile streaming & downloads</p>
+                </div>
+              </div>
+              <div class="setting-input-wrap" style="display: flex; gap: 8px; margin-top: 10px;">
+                <input type="text" id="setting-server-url" placeholder="http://192.168.1.xxx:5050" style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-primary); font-size: 0.85rem;" />
+                <button class="btn-secondary" id="btn-save-server-url" style="padding: 8px 14px; font-size: 0.82rem; border-radius: 8px;">Save</button>
+              </div>
+            </div>
+
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">⚡</div>
+                <div>
+                  <h4>Offline Mode Simulation</h4>
+                  <p>Force offline behavior to test local library lock</p>
+                </div>
+              </div>
+              <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 0.85rem; color: var(--text-secondary);">Force Offline (Library Only)</span>
+                <input type="checkbox" id="setting-force-offline" style="width: 20px; height: 20px; accent-color: var(--accent-emerald); cursor: pointer;" />
+              </div>
             </div>
           </div>
         </section>
@@ -757,6 +803,63 @@
           <div class="playlist-form-actions">
             <button type="button" class="btn-secondary" id="btn-cancel-playlist">Cancel</button>
             <button type="submit" class="btn-primary" id="btn-submit-playlist">Create Playlist</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Import Playlist Modal (Spotify & YouTube Music) -->
+    <div id="import-playlist-modal" class="modal-root" style="display: none;">
+      <div class="modal-backdrop" id="import-playlist-backdrop"></div>
+      <div class="modal-window glass import-playlist-window">
+        <button class="modal-close-icon" id="import-playlist-close" title="Close">&times;</button>
+        <div class="import-playlist-header">
+          <div class="import-platform-badges">
+            <span class="badge-platform badge-spotify">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.436-5.308-1.76-8.793-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.809-.871 7.076-.496 9.721 1.121.294.18.388.563.208.857zm1.226-2.723c-.226.367-.707.482-1.074.256-2.69-1.653-6.79-2.131-9.97-1.165-.413.125-.853-.11-.978-.523-.125-.413.11-.853.523-.978 3.637-1.104 8.163-.568 11.243 1.336.367.226.482.707.256 1.074zm.106-2.835C14.692 8.95 8.082 8.73 4.708 9.755c-.495.15-1.022-.13-1.172-.625-.15-.495.13-1.022.625-1.172 3.94-1.196 11.233-.943 15.176 1.398.444.263.59.84.327 1.284-.263.444-.84.59-1.284.327z"/></svg>
+              Spotify
+            </span>
+            <span class="badge-platform badge-ytm">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.5 14.5v-9l6 4.5-6 4.5z"/></svg>
+              YouTube Music
+            </span>
+          </div>
+          <h3>Import External Playlist</h3>
+          <p>Paste a playlist link from Spotify or YouTube Music to import tracks, metadata & artwork directly into your library.</p>
+        </div>
+        <form id="import-playlist-form" class="import-playlist-form">
+          <div class="form-group">
+            <label for="import-playlist-url">Playlist URL <span class="required">*</span></label>
+            <div class="url-input-wrap">
+              <input type="url" id="import-playlist-url" placeholder="https://open.spotify.com/playlist/... or https://music.youtube.com/playlist?list=..." required autocomplete="off" />
+              <button type="button" class="btn-paste" id="btn-import-paste" title="Paste from clipboard">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                <span>Paste</span>
+              </button>
+            </div>
+            <span class="input-hint">Supports Spotify playlists, YouTube Music playlists, and public YouTube album/playlist links.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="import-playlist-custom-name">Custom Title (Optional)</label>
+            <input type="text" id="import-playlist-custom-name" placeholder="Leave empty to use original playlist title" maxlength="80" autocomplete="off" />
+          </div>
+
+          <!-- Live Status / Progress Feedback -->
+          <div id="import-playlist-status" class="import-status-box" style="display: none;">
+            <div class="import-spinner"></div>
+            <div class="import-status-text">
+              <span id="import-status-title">Importing playlist...</span>
+              <span id="import-status-subtitle">Resolving playlist tracks and metadata...</span>
+            </div>
+          </div>
+
+          <div class="playlist-form-actions">
+            <button type="button" class="btn-secondary" id="btn-cancel-import">Cancel</button>
+            <button type="submit" class="btn-primary" id="btn-submit-import">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Import Playlist</span>
+            </button>
           </div>
         </form>
       </div>

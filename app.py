@@ -14,6 +14,7 @@ import shutil
 import base64
 import urllib.request
 import urllib.parse
+from ssl_helper import safe_urlopen
 import subprocess
 import uuid
 from threading import Thread, Lock
@@ -76,13 +77,73 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # User Data & Playlists Storage
 if getattr(sys, 'frozen', False):
     USER_DATA_DIR = os.path.expanduser("~/Music/Music Studio/.musicstudio")
+    os.makedirs(USER_DATA_DIR, exist_ok=True)
+    target_pl = os.path.join(USER_DATA_DIR, "playlists.json")
+    if not os.path.exists(target_pl):
+        bundle_pl = get_resource_path(os.path.join("data", "playlists.json"))
+        if os.path.exists(bundle_pl):
+            try:
+                import shutil
+                shutil.copy2(bundle_pl, target_pl)
+            except Exception:
+                pass
 else:
     USER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(USER_DATA_DIR, exist_ok=True)
 PLAYLISTS_FILE = os.path.join(USER_DATA_DIR, "playlists.json")
+PLAY_STATS_FILE = os.path.join(USER_DATA_DIR, "play_stats.json")
+SETTINGS_FILE = os.path.join(USER_DATA_DIR, "settings.json")
 PLAYLIST_COVERS_DIR = os.path.join(USER_DATA_DIR, "covers")
 os.makedirs(PLAYLIST_COVERS_DIR, exist_ok=True)
 playlists_lock = Lock()
+play_stats_lock = Lock()
+settings_lock = Lock()
+
+def load_settings() -> Dict:
+    with settings_lock:
+        if not os.path.exists(SETTINGS_FILE):
+            return {}
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            return {}
+
+def save_settings(settings_data: Dict):
+    with settings_lock:
+        try:
+            cur = {}
+            if os.path.exists(SETTINGS_FILE):
+                try:
+                    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                        cur = json.load(f)
+                except Exception:
+                    cur = {}
+            cur.update(settings_data)
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(cur, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+
+def load_play_stats() -> Dict[str, Dict]:
+    with play_stats_lock:
+        if not os.path.exists(PLAY_STATS_FILE):
+            return {}
+        try:
+            with open(PLAY_STATS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading play stats: {e}")
+            return {}
+
+def save_play_stats(stats: Dict[str, Dict]):
+    with play_stats_lock:
+        try:
+            with open(PLAY_STATS_FILE, "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving play stats: {e}")
 
 def load_playlists() -> List[Dict]:
     with playlists_lock:
@@ -218,6 +279,13 @@ class CoverUploadPayload(BaseModel):
 
 class ImportPlaylistRequest(BaseModel):
     url: str
+
+class RecordPlayRequest(BaseModel):
+    filename: Optional[str] = ""
+    title: Optional[str] = ""
+    artist: Optional[str] = ""
+    album: Optional[str] = ""
+    duration: Optional[int] = 0
 
 def enrich_tracks_for_download(tracks: List[Dict], threads: int = 4) -> Dict[tuple, Dict]:
     """Enrich track metadata before downloading. Returns cache of enriched data."""
@@ -715,10 +783,114 @@ def download_batch_tracks_route(req: BatchTracksDownloadRequest, background_task
     background_tasks.add_task(run_batch_songs_worker, req)
     return {"status": "started", "title": req.title, "count": len(req.tracks)}
 
+# ==================== PLAY STATS & SMART PLAYLISTS ====================
+def record_play_stat(req: RecordPlayRequest) -> Dict:
+    stats = load_play_stats()
+    now_ts = int(time.time())
+    
+    key = ""
+    if req.filename and req.filename.strip():
+        key = req.filename.strip()
+    elif req.title and req.title.strip():
+        key = f"{req.title.strip().lower()} - {(req.artist or '').strip().lower()}"
+    else:
+        return {"status": "ignored", "reason": "empty_track"}
+
+    entry = stats.get(key, {})
+    current_count = entry.get("play_count", 0) + 1
+    
+    entry.update({
+        "filename": req.filename or entry.get("filename", ""),
+        "title": req.title or entry.get("title", ""),
+        "artist": req.artist or entry.get("artist", ""),
+        "album": req.album or entry.get("album", ""),
+        "duration": req.duration or entry.get("duration", 0),
+        "play_count": current_count,
+        "last_played": now_ts,
+        "first_played": entry.get("first_played", now_ts)
+    })
+    
+    stats[key] = entry
+    save_play_stats(stats)
+    return {"status": "recorded", "play_count": current_count, "key": key}
+
+def get_most_played_tracks(limit: int = 100) -> List[Dict]:
+    stats = load_play_stats()
+    ranked = []
+    
+    try:
+        songs = list_songs()
+        song_by_fn = {s["filename"]: s for s in songs}
+        song_by_title_artist = {f"{s['title'].strip().lower()} - {s['artist'].strip().lower()}": s for s in songs}
+    except Exception:
+        song_by_fn = {}
+        song_by_title_artist = {}
+
+    for key, item in stats.items():
+        count = item.get("play_count", 0)
+        if count <= 0:
+            continue
+            
+        fn = item.get("filename", "")
+        tit = item.get("title", "")
+        art = item.get("artist", "")
+        lookup_key = f"{tit.strip().lower()} - {art.strip().lower()}"
+        
+        match = song_by_fn.get(fn) or song_by_title_artist.get(lookup_key)
+        
+        final_fn = match["filename"] if match else fn
+        final_title = match["title"] if match else tit
+        final_artist = match["artist"] if match else art
+        final_album = match["album"] if match else item.get("album", "Most Played")
+        final_dur = match["duration"] if match else item.get("duration", 0)
+        cover_url = f"/api/songs/artwork/{urllib.parse.quote(final_fn)}" if final_fn else (item.get("cover_url") or "/static/placeholder.svg")
+        
+        ranked.append({
+            "id": f"mp_{key}",
+            "filename": final_fn,
+            "title": final_title,
+            "artist": final_artist,
+            "album": final_album,
+            "duration": final_dur,
+            "cover_url": cover_url,
+            "play_count": count,
+            "last_played": item.get("last_played", 0),
+            "query": f"{final_title} {final_artist}".strip()
+        })
+        
+    ranked.sort(key=lambda x: (x["play_count"], x.get("last_played", 0)), reverse=True)
+    return ranked[:limit]
+
+def get_smart_most_played_playlist() -> Dict:
+    tracks = get_most_played_tracks(100)
+    return {
+        "id": "smart_most_played",
+        "title": "🔥 Most Played",
+        "description": "Your Top 100 most played tracks of all time",
+        "type": "smart",
+        "is_smart": True,
+        "is_custom": False,
+        "track_count": len(tracks),
+        "cover_url": tracks[0]["cover_url"] if tracks else "/static/placeholder.svg",
+        "created_at": 0,
+        "updated_at": int(time.time()),
+        "tracks": tracks
+    }
+
 # ==================== PLAYLISTS API ====================
 @app.get("/api/playlists")
 def list_playlists_route():
-    return load_playlists()
+    playlists = load_playlists()
+    smart_pl = get_smart_most_played_playlist()
+    return [smart_pl] + playlists
+
+@app.post("/api/play-stats/record")
+def record_play_route(req: RecordPlayRequest):
+    return record_play_stat(req)
+
+@app.get("/api/play-stats/most-played")
+def get_most_played_route(limit: int = 100):
+    return get_most_played_tracks(limit=limit)
 
 @app.post("/api/playlists")
 def create_playlist_route(req: CreatePlaylistRequest):
@@ -747,6 +919,8 @@ def create_playlist_route(req: CreatePlaylistRequest):
 
 @app.get("/api/playlists/{playlist_id}")
 def get_playlist_route(playlist_id: str):
+    if playlist_id == "smart_most_played":
+        return get_smart_most_played_playlist()
     playlists = load_playlists()
     for pl in playlists:
         if pl.get("id") == playlist_id:
@@ -755,6 +929,8 @@ def get_playlist_route(playlist_id: str):
 
 @app.put("/api/playlists/{playlist_id}")
 def update_playlist_route(playlist_id: str, req: UpdatePlaylistRequest):
+    if playlist_id == "smart_most_played":
+        raise HTTPException(status_code=400, detail="Cannot modify system smart playlist")
     playlists = load_playlists()
     for pl in playlists:
         if pl.get("id") == playlist_id:
@@ -771,6 +947,8 @@ def update_playlist_route(playlist_id: str, req: UpdatePlaylistRequest):
 
 @app.delete("/api/playlists/{playlist_id}")
 def delete_playlist_route(playlist_id: str):
+    if playlist_id == "smart_most_played":
+        raise HTTPException(status_code=400, detail="Cannot delete system smart playlist")
     playlists = load_playlists()
     initial_len = len(playlists)
     playlists = [pl for pl in playlists if pl.get("id") != playlist_id]
@@ -1254,7 +1432,7 @@ def resolve_stream_url(query: str) -> dict:
     total_size = 0
     try:
         req = urllib.request.Request(stream_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=4) as probe:
+        with safe_urlopen(req, timeout=4) as probe:
             content_type = probe.headers.get('Content-Type', 'audio/webm')
             total_size = int(probe.headers.get('Content-Length', 0))
     except Exception:
@@ -1321,7 +1499,7 @@ def stream_audio_live(q: str, request: Request):
 
     try:
         req = urllib.request.Request(stream_url, headers=req_headers)
-        upstream = urllib.request.urlopen(req, timeout=10)
+        upstream = safe_urlopen(req, timeout=10)
         status_code = upstream.status
 
         resp_headers = {
@@ -1364,6 +1542,54 @@ def open_songs_folder():
     else:
         subprocess.run(["xdg-open", SONGS_DIR])
     return {"status": "opened", "path": SONGS_DIR}
+
+class PlaybackStatePayload(BaseModel):
+    is_playing: bool = False
+    title: str = ""
+    artist: str = ""
+    album: str = ""
+    cover_url: str = ""
+    current_time: float = 0
+    duration: float = 0
+    index: int = -1
+
+class PlaybackActionPayload(BaseModel):
+    action: str
+    time: Optional[float] = None
+
+current_playback_state = {
+    "is_playing": False,
+    "title": "",
+    "artist": "",
+    "album": "",
+    "cover_url": "",
+    "current_time": 0,
+    "duration": 0,
+    "index": -1
+}
+
+@app.get("/api/playback")
+def get_playback_status():
+    return current_playback_state
+
+@app.post("/api/playback")
+def update_playback_status(payload: PlaybackStatePayload):
+    global current_playback_state
+    current_playback_state = payload.dict()
+    state.notify("playback", current_playback_state)
+    return {"status": "ok"}
+
+@app.post("/api/playback/action")
+def trigger_playback_action(req: PlaybackActionPayload):
+    state.notify("playback_command", req.dict())
+    return {"status": "command_dispatched", "action": req.action}
+
+@app.get("/notch_hud")
+def serve_notch_hud():
+    hud_path = os.path.join(STATIC_DIR, "notch_hud.html")
+    if os.path.isfile(hud_path):
+        return FileResponse(hud_path)
+    return HTMLResponse("<h1>Notch HUD</h1>")
 
 @app.get("/api/events")
 async def events_stream():

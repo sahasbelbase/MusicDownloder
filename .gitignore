@@ -44,3 +44,39 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Node dependencies & logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Android build outputs & caches
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+android/*.iml
+android/local.properties
+android/.externalNativeBuild/
+
+# iOS build outputs & caches
+ios/App/Pods/
+ios/App/DerivedData/
+ios/App/.build/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+*.xcscmblueprint
+
+# Test Scratchpad & Temporary Media
+scratch/
+.tempmediaStorage/
+*.log
+
+# Intermediate Build Objects & Unpacked Folders
+*.res
+releases/MusicStudio-Windows-x64/
+
+# Runtime User Play Stats (State file generated on song playback)
+data/play_stats.json
