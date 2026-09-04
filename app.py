@@ -42,7 +42,7 @@ from download_playlist import (
 import discovery
 from fix_metadata import process_file as enrich_single_file, fetch_itunes_metadata
 
-app = FastAPI(title="SpotiDownloader Studio")
+app = FastAPI(title="Music Studio")
 
 app.add_middleware(
     CORSMiddleware,
@@ -830,6 +830,6 @@ def serve_index():
 if __name__ == "__main__":
     import uvicorn
     PORT = int(os.environ.get("PORT", 5050))
-    print(f"\n🚀 Starting SpotiDownloader Studio Web Server on http://localhost:{PORT}")
+    print(f"\n🚀 Starting Music Studio Web Server on http://localhost:{PORT}")
     print("📁 Destination folder:", SONGS_DIR)
     uvicorn.run("app:app", host="127.0.0.1", port=PORT, reload=False, log_level="info")

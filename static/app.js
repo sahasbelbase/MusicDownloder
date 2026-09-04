@@ -1,5 +1,5 @@
 /**
- * SpotiStudio - Ultra-Clean Client Application
+ * Music Studio - Ultra-Clean Client Application
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -108,12 +108,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSongIndex = -1;
   let isPlaying = false;
   let isSeeking = false;
-  let isShuffle = localStorage.getItem('spotistudio_shuffle') === 'true';
-  let repeatMode = localStorage.getItem('spotistudio_repeat') || 'off'; // 'off' | 'all' | 'one'
+  let isShuffle = (localStorage.getItem('musicstudio_shuffle') || localStorage.getItem('spotistudio_shuffle')) === 'true';
+  let repeatMode = localStorage.getItem('musicstudio_repeat') || localStorage.getItem('spotistudio_repeat') || 'off'; // 'off' | 'all' | 'one'
   let playHistory = [];
   let selectedSong = null;
   let searchDebounce = null;
-  let previousVolume = parseFloat(localStorage.getItem('spotistudio_volume')) || 0.8;
+  let previousVolume = parseFloat(localStorage.getItem('musicstudio_volume') || localStorage.getItem('spotistudio_volume')) || 0.8;
 
   // Platform Icons SVG
   const ICONS = {
@@ -1120,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (playerShuffle) {
     playerShuffle.addEventListener('click', () => {
       isShuffle = !isShuffle;
-      localStorage.setItem('spotistudio_shuffle', isShuffle ? 'true' : 'false');
+      localStorage.setItem('musicstudio_shuffle', isShuffle ? 'true' : 'false');
       updateShuffleUI();
       showToast(isShuffle ? 'Shuffle: On' : 'Shuffle: Off', 'info');
     });
@@ -1135,7 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         repeatMode = 'off';
       }
-      localStorage.setItem('spotistudio_repeat', repeatMode);
+      localStorage.setItem('musicstudio_repeat', repeatMode);
       updateRepeatUI();
       const label = repeatMode === 'one' ? 'Repeat: Current Track' : (repeatMode === 'all' ? 'Repeat: All Tracks' : 'Repeat: Off');
       showToast(label, 'info');
@@ -1239,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const val = parseFloat(e.target.value);
     audioEngine.volume = val;
     previousVolume = val;
-    localStorage.setItem('spotistudio_volume', val.toString());
+    localStorage.setItem('musicstudio_volume', val.toString());
     updateVolumeFill(val);
     updateVolumeIcon(val);
   });
