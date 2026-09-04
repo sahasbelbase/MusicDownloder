@@ -1641,7 +1641,18 @@ def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
+    import socket
     PORT = int(os.environ.get("PORT", 5050))
+    local_ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
     print(f"\n🚀 Starting Music Studio Web Server on http://localhost:{PORT}")
+    print(f"📱 Mobile / Wi-Fi Connection: http://{local_ip}:{PORT}")
     print("📁 Destination folder:", SONGS_DIR)
-    uvicorn.run("app:app", host="127.0.0.1", port=PORT, reload=False, log_level="info")
+    uvicorn.run("app:app", host="0.0.0.0", port=PORT, reload=False, log_level="info")

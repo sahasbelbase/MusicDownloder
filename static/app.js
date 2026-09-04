@@ -351,15 +351,124 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ==================== OPEN FOLDER IN FINDER ====================
-  btnOpenFolder.addEventListener('click', async () => {
-    try {
-      await fetch('/api/open-folder', { method: 'POST' });
-      showToast('Opened Songs directory in Finder');
-    } catch {
-      showToast('Failed to open Songs folder', 'error');
+  // ==================== MUSIC FOLDER & DEVICE FILE PICKER ====================
+  const isMobilePlatform = window.location.protocol === 'capacitor:' ||
+    (window.location.hostname === 'localhost' && (window.location.port === '' || window.location.port === '80')) ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const localMusicFolderInput = document.getElementById('local-music-folder-input');
+  const localMusicFilesInput = document.getElementById('local-music-files-input');
+  const btnChooseDeviceMusic = document.getElementById('btn-choose-device-music');
+
+  window.localDeviceAudioFiles = window.localDeviceAudioFiles || new Map();
+
+  function triggerLocalMusicPicker() {
+    if (localMusicFolderInput) {
+      try {
+        localMusicFolderInput.click();
+      } catch (e) {
+        if (localMusicFilesInput) localMusicFilesInput.click();
+      }
+    } else if (localMusicFilesInput) {
+      localMusicFilesInput.click();
     }
-  });
+  }
+
+  if (btnOpenFolder) {
+    if (isMobilePlatform) {
+      btnOpenFolder.title = 'Choose Music Folder';
+    }
+    btnOpenFolder.addEventListener('click', async () => {
+      if (isMobilePlatform) {
+        triggerLocalMusicPicker();
+        return;
+      }
+      // On desktop, try to open folder via backend API
+      try {
+        const res = await fetch('/api/open-folder', { method: 'POST' });
+        if (res.ok) {
+          showToast('Opened Songs directory in file manager', 'info');
+          return;
+        }
+      } catch {}
+      triggerLocalMusicPicker();
+    });
+  }
+
+  if (btnChooseDeviceMusic) {
+    btnChooseDeviceMusic.addEventListener('click', () => {
+      triggerLocalMusicPicker();
+    });
+  }
+
+  function handleLocalAudioFiles(files) {
+    if (!files || files.length === 0) return;
+    const audioFiles = Array.from(files).filter(f =>
+      f.type.startsWith('audio/') ||
+      /\.(mp3|m4a|wav|flac|ogg|opus|aac|wma)$/i.test(f.name)
+    );
+    if (audioFiles.length === 0) {
+      showToast('No audio tracks found in selected folder', 'warning');
+      return;
+    }
+
+    let addedCount = 0;
+    audioFiles.forEach(file => {
+      const fileId = 'local_' + encodeURIComponent(file.name) + '_' + file.size;
+      window.localDeviceAudioFiles.set(fileId, file);
+
+      let baseName = file.name.replace(/\.[^/.]+$/, '');
+      let artist = 'Local Music';
+      let title = baseName;
+      if (baseName.includes(' - ')) {
+        const parts = baseName.split(' - ');
+        artist = parts[0].trim();
+        title = parts.slice(1).join(' - ').trim();
+      }
+
+      const songObj = {
+        id: fileId,
+        filename: file.name,
+        title: title || file.name,
+        artist: artist,
+        album: 'Device Music',
+        duration: 0,
+        is_local_device: true,
+        file_ref_id: fileId,
+        cover_url: 'placeholder.svg',
+        mtime: file.lastModified ? Math.floor(file.lastModified / 1000) : Math.floor(Date.now() / 1000)
+      };
+
+      const existingIdx = rawLibrarySongs.findIndex(s => s.filename === file.name);
+      if (existingIdx >= 0) {
+        rawLibrarySongs[existingIdx] = songObj;
+      } else {
+        rawLibrarySongs.unshift(songObj);
+        addedCount++;
+      }
+    });
+
+    try {
+      localStorage.setItem('musicstudio_cached_library', JSON.stringify(rawLibrarySongs));
+    } catch (e) {}
+
+    navSongCount.textContent = rawLibrarySongs.length;
+    if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
+    libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
+    applySortAndFilter();
+    showToast(`Loaded ${addedCount || audioFiles.length} song${(addedCount || audioFiles.length) === 1 ? '' : 's'} from your device!`, 'success');
+  }
+
+  if (localMusicFolderInput) {
+    localMusicFolderInput.addEventListener('change', (e) => {
+      handleLocalAudioFiles(e.target.files);
+    });
+  }
+  if (localMusicFilesInput) {
+    localMusicFilesInput.addEventListener('change', (e) => {
+      handleLocalAudioFiles(e.target.files);
+    });
+  }
 
   // ==================== START DOWNLOAD ====================
   btnDownload.addEventListener('click', async () => {
@@ -657,17 +766,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (librarySongs.length === 0) {
-      libraryContainer.innerHTML = `
-        <div class="empty-state glass" style="grid-column: 1 / -1; width: 100%;">
-          <div class="empty-icon-wrap">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <polygon points="10 8 16 12 10 16 10 8" />
-            </svg>
+      const isSearchActive = Boolean((librarySearch.value || '').trim());
+      if (isSearchActive) {
+        libraryContainer.innerHTML = `
+          <div class="empty-state glass" style="grid-column: 1 / -1; width: 100%;">
+            <div class="empty-icon-wrap">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="10 8 16 12 10 16 10 8" />
+              </svg>
+            </div>
+            <p>No tracks matching search criteria</p>
           </div>
-          <p>No tracks matching criteria</p>
-        </div>
-      `;
+        `;
+      } else {
+        libraryContainer.innerHTML = `
+          <div class="empty-state glass" style="grid-column: 1 / -1; width: 100%; padding: 45px 20px; text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 12px;">📁</div>
+            <h3 style="font-size: 1.28rem; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">No Local Songs Found</h3>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); max-width: 420px; margin: 0 auto 22px; line-height: 1.5;">
+              Choose your music folder on this device to instantly load your downloaded songs, or connect to your desktop PC.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+              <button class="btn-primary" id="btn-empty-choose-folder" style="padding: 11px 20px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Choose Music Folder</span>
+              </button>
+              <button class="btn-secondary" id="btn-empty-choose-files" style="padding: 11px 20px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                <span>Select Audio Files</span>
+              </button>
+            </div>
+          </div>
+        `;
+        const emptyFolderBtn = document.getElementById('btn-empty-choose-folder');
+        const emptyFilesBtn = document.getElementById('btn-empty-choose-files');
+        if (emptyFolderBtn) emptyFolderBtn.addEventListener('click', triggerLocalMusicPicker);
+        if (emptyFilesBtn) emptyFilesBtn.addEventListener('click', () => {
+          if (localMusicFilesInput) localMusicFilesInput.click();
+        });
+      }
       return;
     }
 
@@ -680,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const card = document.createElement('div');
           card.className = 'song-card' + (idx === currentSongIndex ? ' playing' : '');
           card.dataset.index = idx;
-          const coverUrl = `/api/songs/artwork/${encodeURIComponent(song.filename)}`;
+          const coverUrl = song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
 
           card.innerHTML = `
             <div class="song-card-art-wrap">
@@ -717,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const row = document.createElement('div');
           row.className = 'song-row' + (idx === currentSongIndex ? ' playing' : '');
           row.dataset.index = idx;
-          const coverUrl = `/api/songs/artwork/${encodeURIComponent(song.filename)}`;
+          const coverUrl = song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
           const durationFormatted = formatSeconds(song.duration || 0);
 
           row.innerHTML = `
@@ -1237,13 +1375,25 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadExplore() {
     try {
       const res = await fetch('/api/explore/featured');
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Connect to desktop server in Settings to explore & download online playlists');
+      }
       if (!res.ok) throw new Error('Failed to load explore feed');
       const data = await res.json();
 
       renderFeaturedPlaylists(data.featured || []);
       renderTrendingTracks(data.trending || []);
     } catch (e) {
-      console.error('Error loading explore feed:', e);
+      console.warn('Explore feed notice:', e);
+      if (featuredPlaylistsGrid && (!featuredPlaylistsGrid.children || featuredPlaylistsGrid.children.length === 0)) {
+        featuredPlaylistsGrid.innerHTML = `
+          <div class="empty-state glass" style="grid-column: 1 / -1; width: 100%; padding: 25px; text-align: center;">
+            <p style="color: var(--text-secondary); margin-bottom: 10px;">Connect to your Music Studio desktop server in <strong>Settings</strong> to explore and download curated charts over Wi-Fi.</p>
+            <p style="font-size: 0.8rem; color: var(--text-tertiary);">Or browse your downloaded music in the <strong>Library</strong> tab.</p>
+          </div>
+        `;
+      }
     }
   }
 
@@ -1658,7 +1808,11 @@ document.addEventListener('DOMContentLoaded', () => {
       exploreSearchCount.textContent = 'Fetching songs & albums...';
 
       const res = await fetch(`/api/explore/search?q=${encodeURIComponent(q)}&type=all`);
-      if (!res.ok) throw new Error('Search failed');
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Desktop server not connected. Enter your computer\'s Wi-Fi address in Settings to search & download music.');
+      }
+      if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`);
       const data = await res.json();
       currentSearchResults = {
         tracks: data.tracks || data.results || [],
@@ -1667,8 +1821,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       renderSearchResults(q);
     } catch (e) {
-      exploreSearchTitle.textContent = 'Search Error';
+      exploreSearchTitle.textContent = 'Server Connection Needed';
       exploreSearchCount.textContent = e.message;
+      showToast(e.message, 'warning');
     }
   }
 
@@ -2506,8 +2661,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (playHistory.length > 100) playHistory.shift();
 
     const song = librarySongs[idx];
-    const audioUrl = resolveApiUrl(`/api/songs/audio/${encodeURIComponent(song.filename)}`);
-    const coverUrl = resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
+    let audioUrl = '';
+    let coverUrl = 'placeholder.svg';
+
+    if (song.is_local_device && song.file_ref_id) {
+      const localFile = window.localDeviceAudioFiles.get(song.file_ref_id);
+      if (localFile) {
+        audioUrl = URL.createObjectURL(localFile);
+      } else {
+        showToast('Please re-select your music folder to play this local track', 'info');
+        triggerLocalMusicPicker();
+        return;
+      }
+    } else {
+      audioUrl = resolveApiUrl(`/api/songs/audio/${encodeURIComponent(song.filename)}`);
+      coverUrl = resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
+    }
 
     audioEngine.src = audioUrl;
     audioEngine.load();
@@ -3647,15 +3816,76 @@ document.addEventListener('DOMContentLoaded', () => {
     // Server URL configuration in Settings
     const serverUrlInput = document.getElementById('setting-server-url');
     const saveServerUrlBtn = document.getElementById('btn-save-server-url');
+    const testServerUrlBtn = document.getElementById('btn-test-server-url');
+
     if (serverUrlInput) {
-      serverUrlInput.value = localStorage.getItem('musicstudio_server_url') || window.location.origin;
+      const stored = localStorage.getItem('musicstudio_server_url') || '';
+      // Only default to origin if NOT on mobile / capacitor localhost
+      if (stored) {
+        serverUrlInput.value = stored;
+      } else if (!isMobilePlatform && window.location.origin && !window.location.origin.includes('localhost:80')) {
+        serverUrlInput.value = window.location.origin;
+      } else {
+        serverUrlInput.value = '';
+      }
     }
+
     if (saveServerUrlBtn && serverUrlInput) {
       saveServerUrlBtn.addEventListener('click', () => {
-        const val = serverUrlInput.value.trim();
+        let val = serverUrlInput.value.trim();
         if (val) {
+          if (!val.startsWith('http://') && !val.startsWith('https://')) {
+            val = 'http://' + val;
+            serverUrlInput.value = val;
+          }
+          val = val.replace(/\/+$/, '');
           localStorage.setItem('musicstudio_server_url', val);
           showToast(`Server URL saved: ${val}`, 'success');
+          loadLibrary();
+          loadExplore();
+          loadUserPlaylists();
+        } else {
+          localStorage.removeItem('musicstudio_server_url');
+          showToast('Server URL cleared (Standalone Mode)', 'info');
+        }
+      });
+    }
+
+    if (testServerUrlBtn && serverUrlInput) {
+      testServerUrlBtn.addEventListener('click', async () => {
+        let val = serverUrlInput.value.trim();
+        if (!val) {
+          showToast('Please enter your computer\'s Wi-Fi address (e.g. http://192.168.1.xxx:5050)', 'warning');
+          return;
+        }
+        if (!val.startsWith('http://') && !val.startsWith('https://')) {
+          val = 'http://' + val;
+          serverUrlInput.value = val;
+        }
+        val = val.replace(/\/+$/, '');
+        testServerUrlBtn.disabled = true;
+        testServerUrlBtn.textContent = 'Connecting...';
+        try {
+          const res = await nativeFetch(`${val}/api/playlists`);
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            localStorage.setItem('musicstudio_server_url', val);
+            showToast('✅ Connected to Music Studio PC Server! Syncing...', 'success');
+            testServerUrlBtn.textContent = 'Connected!';
+            loadLibrary();
+            loadExplore();
+            loadUserPlaylists();
+          } else {
+            throw new Error(`Server returned HTTP ${res.status}`);
+          }
+        } catch (err) {
+          showToast(`❌ Cannot reach ${val}. Check Wi-Fi and port 5050.`, 'error');
+          testServerUrlBtn.textContent = 'Failed';
+        } finally {
+          setTimeout(() => {
+            testServerUrlBtn.disabled = false;
+            testServerUrlBtn.textContent = 'Test Connection';
+          }, 3000);
         }
       });
     }

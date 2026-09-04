@@ -140,11 +140,13 @@
 
         <!-- Right Quick Actions -->
         <div class="nav-actions">
-          <button class="icon-btn" id="btn-open-folder" title="Open Songs Folder in Finder">
+          <button class="icon-btn" id="btn-open-folder" title="Choose Music Folder">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
           </button>
+          <input type="file" id="local-music-folder-input" webkitdirectory directory multiple accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aac" style="display: none;" />
+          <input type="file" id="local-music-files-input" multiple accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aac" style="display: none;" />
         </div>
       </header>
 
@@ -421,6 +423,12 @@
                 </svg>
                 <span>Import Playlist</span>
               </button>
+              <button class="btn-secondary" id="btn-choose-device-music" title="Direct Music Studio to your music folder on this device" style="padding: 6px 12px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; border-radius: 8px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>Choose Music Folder</span>
+              </button>
               <div class="view-switch" id="view-switch-wrap">
                 <button class="view-toggle-btn active" id="view-grid-btn" title="Grid View">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -523,14 +531,18 @@
               <div class="settings-card-head">
                 <div class="settings-icon">📱</div>
                 <div>
-                  <h4>Mobile & Server Connection</h4>
-                  <p>Server URL for mobile streaming & downloads</p>
+                  <h4>Mobile & Desktop PC Connection</h4>
+                  <p>Connect to your computer over Wi-Fi to sync, stream & download</p>
                 </div>
               </div>
-              <div class="setting-input-wrap" style="display: flex; gap: 8px; margin-top: 10px;">
-                <input type="text" id="setting-server-url" placeholder="http://192.168.1.xxx:5050" style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-primary); font-size: 0.85rem;" />
+              <div class="setting-input-wrap" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                <input type="text" id="setting-server-url" placeholder="http://192.168.x.x:5050" style="flex: 1; min-width: 180px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-primary); font-size: 0.85rem;" />
                 <button class="btn-secondary" id="btn-save-server-url" style="padding: 8px 14px; font-size: 0.82rem; border-radius: 8px;">Save</button>
+                <button class="btn-secondary" id="btn-test-server-url" style="padding: 8px 14px; font-size: 0.82rem; border-radius: 8px;">Test Connection</button>
               </div>
+              <p style="font-size: 0.74rem; color: var(--text-tertiary); margin-top: 8px; line-height: 1.4;">
+                Tip: Run Music Studio on your computer on the same Wi-Fi network. Check the terminal for your computer's IP address (e.g. <code>http://192.168.1.xxx:5050</code>).
+              </p>
             </div>
 
             <div class="settings-card glass">
