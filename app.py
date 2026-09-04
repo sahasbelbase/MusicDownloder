@@ -61,9 +61,14 @@ async def add_no_cache_header(request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+def get_resource_path(relative_path):
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
 SONGS_DIR = DEFAULT_OUTPUT_FOLDER
 os.makedirs(SONGS_DIR, exist_ok=True)
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+STATIC_DIR = get_resource_path("static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 # Global Application State

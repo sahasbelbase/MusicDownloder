@@ -27,9 +27,14 @@ from typing import List, Dict, Optional, Tuple
 import mutagen
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
 
-# Default configuration
-DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
-DEFAULT_OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
+def get_default_output_folder():
+    if getattr(sys, 'frozen', False):
+        user_music = os.path.expanduser("~/Music/Music Studio")
+        os.makedirs(user_music, exist_ok=True)
+        return user_music
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "Songs")
+
+DEFAULT_OUTPUT_FOLDER = get_default_output_folder()
 DEFAULT_THREADS = 3
 DEFAULT_BITRATE = "320k"
 DEFAULT_NAMING = "title"  # 'title' -> "{Title}.mp3", 'artist-title' -> "{Artist} - {Title}.mp3"
@@ -121,16 +126,38 @@ def clean_track_artist_and_title(raw_title: str, raw_artist: str = "") -> Tuple[
     return artist, title
 
 def find_ffmpeg() -> str:
-    """Find FFmpeg binary in system or Homebrew paths."""
+    """Find FFmpeg binary in bundled paths, system PATH, or Homebrew."""
+    # 1. PyInstaller bundled temp directory
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        bundle_ffmpeg = os.path.join(sys._MEIPASS, "ffmpeg")
+        if os.path.isfile(bundle_ffmpeg) and os.access(bundle_ffmpeg, os.X_OK):
+            return bundle_ffmpeg
+        bundle_ffmpeg_win = os.path.join(sys._MEIPASS, "ffmpeg.exe")
+        if os.path.isfile(bundle_ffmpeg_win):
+            return bundle_ffmpeg_win
+
+    # 2. Next to executable
+    exe_dir = os.path.dirname(sys.executable)
+    local_ffmpeg = os.path.join(exe_dir, "ffmpeg")
+    if os.path.isfile(local_ffmpeg) and os.access(local_ffmpeg, os.X_OK):
+        return local_ffmpeg
+    local_ffmpeg_win = os.path.join(exe_dir, "ffmpeg.exe")
+    if os.path.isfile(local_ffmpeg_win):
+        return local_ffmpeg_win
+
+    # 3. System PATH
     ffmpeg_bin = shutil.which("ffmpeg")
     if ffmpeg_bin:
         return ffmpeg_bin
 
+    # 4. Standard Mac & Common Paths
     mac_paths = [
         "/opt/homebrew/bin/ffmpeg",
         "/usr/local/bin/ffmpeg",
         "/usr/bin/ffmpeg",
-        "/opt/local/bin/ffmpeg"
+        "/opt/local/bin/ffmpeg",
+        os.path.expanduser("~/.musicstudio/bin/ffmpeg"),
+        os.path.expanduser("~/bin/ffmpeg")
     ]
     for path in mac_paths:
         if os.path.isfile(path) and os.access(path, os.X_OK):
