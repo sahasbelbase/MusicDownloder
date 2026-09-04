@@ -104,9 +104,9 @@
             <div class="discover-hint-pills">
               <span class="hint-label">Trending:</span>
               <button class="hint-pill" data-query="Top Hits 2026">Top Hits 2026</button>
-              <button class="hint-pill" data-query="Bohemian Rhapsody">Bohemian Rhapsody</button>
+              <button class="hint-pill" data-query="Coldplay">Coldplay</button>
+              <button class="hint-pill" data-query="Linkin Park">Linkin Park</button>
               <button class="hint-pill" data-query="The Weeknd">The Weeknd</button>
-              <button class="hint-pill" data-query="Adele">Adele</button>
               <button class="hint-pill" data-query="Billie Eilish">Billie Eilish</button>
             </div>
           </div>
@@ -116,10 +116,31 @@
             <div class="explore-section-header">
               <div>
                 <h3 id="explore-search-title">Search Results</h3>
-                <p id="explore-search-count">0 songs found</p>
+                <p id="explore-search-count">0 items found</p>
+              </div>
+              <div class="search-filter-pills" id="search-filter-pills">
+                <button class="search-filter-pill active" data-filter="all">All</button>
+                <button class="search-filter-pill" data-filter="tracks">Songs</button>
+                <button class="search-filter-pill" data-filter="albums">Albums</button>
               </div>
             </div>
-            <div class="explore-songs-grid" id="explore-search-grid"></div>
+
+            <!-- Albums Section in Search -->
+            <div id="search-albums-container" style="display: none; margin-bottom: 28px;">
+              <div class="sub-section-title">
+                <span>Albums & Singles</span>
+                <span class="sub-section-badge" id="search-albums-badge">0 albums</span>
+              </div>
+              <div class="search-albums-grid" id="search-albums-grid"></div>
+            </div>
+
+            <!-- Tracks Section in Search -->
+            <div id="search-tracks-container">
+              <div class="sub-section-title" id="search-tracks-sub-title" style="display: none; margin-bottom: 14px;">
+                <span>Songs</span>
+              </div>
+              <div class="explore-songs-grid" id="explore-search-grid"></div>
+            </div>
           </div>
 
           <!-- Curated Featured Playlists & Charts -->

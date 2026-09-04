@@ -118,6 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const exploreSearchCount = document.getElementById('explore-search-count');
   const featuredPlaylistsGrid = document.getElementById('featured-playlists-grid');
   const trendingTracksGrid = document.getElementById('trending-tracks-grid');
+  const searchFilterPills = document.getElementById('search-filter-pills');
+  const searchAlbumsContainer = document.getElementById('search-albums-container');
+  const searchAlbumsGrid = document.getElementById('search-albums-grid');
+  const searchAlbumsBadge = document.getElementById('search-albums-badge');
+  const searchTracksContainer = document.getElementById('search-tracks-container');
+  const searchTracksSubTitle = document.getElementById('search-tracks-sub-title');
+  let currentSearchFilter = 'all';
+  let currentSearchResults = { tracks: [], albums: [] };
 
   // Playlist Modal Elements
   const playlistModal = document.getElementById('playlist-modal');
@@ -746,8 +754,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function closeDrawer() {
-    trackDrawer.classList.remove('open');
-    drawerOverlay.classList.remove('open');
+    if (trackDrawer) trackDrawer.classList.remove('open');
+    if (drawerOverlay) drawerOverlay.classList.remove('open');
+  }
+
+  if (drawerCloseBtn) {
+    drawerCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDrawer();
+    });
+  }
+
+  if (drawerOverlay) {
+    drawerOverlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDrawer();
+    });
+  }
+
+  if (drawerPlayBtn) {
+    drawerPlayBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentSongIndex >= 0 && currentSongIndex < librarySongs.length) {
+        playTrack(currentSongIndex);
+      }
+    });
   }
 
   // ==================== DISCOVER & EXPLORE LOGIC ====================
@@ -974,58 +1005,200 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Search Filter Pills Listener
+  document.querySelectorAll('.search-filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.search-filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentSearchFilter = pill.getAttribute('data-filter') || 'all';
+      renderSearchResults(exploreSearchInput ? exploreSearchInput.value.trim() : '');
+    });
+  });
+
   async function performExploreSearch(q) {
     if (!q) return;
     try {
       exploreSearchSection.style.display = 'block';
       exploreSearchTitle.textContent = `Searching for "${q}"...`;
-      exploreSearchCount.textContent = 'Fetching songs...';
+      exploreSearchCount.textContent = 'Fetching songs & albums...';
 
-      const res = await fetch(`/api/explore/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/explore/search?q=${encodeURIComponent(q)}&type=all`);
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
-      const results = data.results || [];
+      currentSearchResults = {
+        tracks: data.tracks || data.results || [],
+        albums: data.albums || []
+      };
 
-      exploreSearchTitle.textContent = `Results for "${q}"`;
-      exploreSearchCount.textContent = `${results.length} songs found`;
-      exploreSearchGrid.innerHTML = '';
-
-      if (!results.length) {
-        exploreSearchGrid.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><p>No songs found for "${escapeHtml(q)}". Try another artist or song title.</p></div>`;
-        return;
-      }
-
-      results.forEach(track => {
-        const card = createExploreTrackCard(track);
-        exploreSearchGrid.appendChild(card);
-      });
+      renderSearchResults(q);
     } catch (e) {
       exploreSearchTitle.textContent = 'Search Error';
       exploreSearchCount.textContent = e.message;
     }
   }
 
-  // ==================== PLAYLIST PREVIEW MODAL ====================
+  function renderSearchResults(q = '') {
+    const { tracks, albums } = currentSearchResults;
+    const searchFilter = currentSearchFilter;
+    const queryStr = q || (exploreSearchInput ? exploreSearchInput.value.trim() : '');
+
+    const hasAlbums = albums && albums.length > 0;
+    const hasTracks = tracks && tracks.length > 0;
+
+    const showAlbums = (searchFilter === 'all' || searchFilter === 'albums') && hasAlbums;
+    const showTracks = (searchFilter === 'all' || searchFilter === 'tracks') && hasTracks;
+
+    exploreSearchTitle.textContent = `Results for "${queryStr}"`;
+
+    if (searchFilter === 'all') {
+      exploreSearchCount.textContent = `${albums.length} albums • ${tracks.length} songs found`;
+    } else if (searchFilter === 'albums') {
+      exploreSearchCount.textContent = `${albums.length} albums found`;
+    } else {
+      exploreSearchCount.textContent = `${tracks.length} songs found`;
+    }
+
+    // Render Albums Section
+    if (showAlbums && searchAlbumsContainer && searchAlbumsGrid) {
+      searchAlbumsContainer.style.display = 'block';
+      if (searchAlbumsBadge) searchAlbumsBadge.textContent = `${albums.length} albums`;
+      searchAlbumsGrid.innerHTML = '';
+      albums.forEach(album => {
+        const card = createSearchAlbumCard(album);
+        searchAlbumsGrid.appendChild(card);
+      });
+    } else if (searchAlbumsContainer) {
+      searchAlbumsContainer.style.display = 'none';
+    }
+
+    // Render Tracks Section
+    if (showTracks && searchTracksContainer && exploreSearchGrid) {
+      searchTracksContainer.style.display = 'block';
+      if (searchTracksSubTitle) {
+        searchTracksSubTitle.style.display = (searchFilter === 'all' && hasAlbums) ? 'block' : 'none';
+      }
+      exploreSearchGrid.innerHTML = '';
+      tracks.forEach(track => {
+        const card = createExploreTrackCard(track);
+        exploreSearchGrid.appendChild(card);
+      });
+    } else if (searchTracksContainer) {
+      searchTracksContainer.style.display = 'none';
+    }
+
+    // Empty state
+    if (!hasAlbums && !hasTracks) {
+      if (searchAlbumsContainer) searchAlbumsContainer.style.display = 'none';
+      if (searchTracksContainer) searchTracksContainer.style.display = 'block';
+      exploreSearchGrid.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><p>No results found for "${escapeHtml(queryStr)}". Try searching another artist, band, or song title.</p></div>`;
+    }
+  }
+
+  function createSearchAlbumCard(album) {
+    const card = document.createElement('div');
+    card.className = 'search-album-card';
+    const coverUrl = album.cover_url || '/static/placeholder.svg';
+    const trackCountText = album.track_count ? `${album.track_count} Tracks` : 'Album';
+    const metaText = album.year ? `${album.year} • ${trackCountText}` : trackCountText;
+
+    card.innerHTML = `
+      <div class="album-card-art-wrap">
+        <img class="album-card-art" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        <span class="album-card-badge">Album</span>
+      </div>
+      <div class="album-card-info">
+        <div class="album-card-title truncate" title="${escapeHtml(album.title)}">${escapeHtml(album.title)}</div>
+        <div class="album-card-artist truncate" title="${escapeHtml(album.artist)}">${escapeHtml(album.artist)}</div>
+        <div class="album-card-meta">${escapeHtml(metaText)}</div>
+      </div>
+      <div class="album-card-actions">
+        <button class="btn-album-download" title="Download Entire Album (${trackCountText})">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Download Album</span>
+        </button>
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-album-download')) return;
+      openPlaylistModal(`album_${album.id}`);
+    });
+
+    const btnDownload = card.querySelector('.btn-album-download');
+    btnDownload.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      downloadEntireAlbum(album, btnDownload);
+    });
+
+    return card;
+  }
+
+  async function downloadEntireAlbum(album, btnEl) {
+    if (btnEl) {
+      btnEl.classList.add('downloading');
+      btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Fetching...</span>`;
+    }
+    try {
+      const res = await fetch(`/api/explore/album/${album.id}`);
+      if (!res.ok) throw new Error('Failed to fetch album tracks');
+      const data = await res.json();
+      await downloadEntirePlaylist(data);
+      if (btnEl) {
+        btnEl.classList.remove('downloading');
+        btnEl.classList.add('downloaded');
+        btnEl.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span>Queued (${data.tracks ? data.tracks.length : 0})</span>`;
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+      if (btnEl) {
+        btnEl.classList.remove('downloading');
+        btnEl.innerHTML = `<span>Error</span>`;
+      }
+    }
+  }
+
+  // ==================== PLAYLIST & ALBUM PREVIEW MODAL ====================
   async function openPlaylistModal(playlistId) {
     if (!playlistModal) return;
     playlistModal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    modalTitle.textContent = 'Loading playlist...';
+    const isAlbum = String(playlistId).startsWith('album_') || String(playlistId).startsWith('album-');
+    if (modalBadge) modalBadge.textContent = isAlbum ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION';
+    modalTitle.textContent = isAlbum ? 'Loading album...' : 'Loading playlist...';
     modalSubtitle.textContent = 'Fetching tracklist and studio metadata...';
     modalTrackCount.textContent = '...';
-    modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);"><span class="pulse-dot"></span> Loading songs...</div>`;
+    modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);"><span class="pulse-dot"></span> Loading tracks...</div>`;
 
     try {
       const res = await fetch(`/api/explore/playlist/${encodeURIComponent(playlistId)}`);
-      if (!res.ok) throw new Error('Failed to load playlist');
+      if (!res.ok) throw new Error('Failed to load collection');
       const data = await res.json();
       currentModalPlaylist = data;
 
+      const isAlbType = (data.type === 'album' || isAlbum);
       modalTitle.textContent = data.title;
-      modalSubtitle.textContent = data.subtitle || 'Curated Studio Collection';
+      modalSubtitle.textContent = data.subtitle || (isAlbType ? `${data.artist || 'Artist'} • Album Master` : 'Curated Studio Collection');
       modalCover.src = data.cover_url || '/static/placeholder.svg';
-      modalTrackCount.textContent = `${data.track_count || (data.tracks ? data.tracks.length : 0)} tracks`;
+      const count = data.track_count || (data.tracks ? data.tracks.length : 0);
+      modalTrackCount.textContent = `${count} tracks`;
+
+      if (modalBadge) modalBadge.textContent = isAlbType ? 'OFFICIAL ALBUM' : 'CURATED COLLECTION';
+
+      if (btnModalDownloadAll) {
+        btnModalDownloadAll.innerHTML = `
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>${isAlbType ? `Download Entire Album (${count} Songs)` : 'Download Entire Playlist'}</span>
+        `;
+      }
 
       renderModalTracklist(data.tracks || []);
 
@@ -1033,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadEntirePlaylist(data);
       };
     } catch (e) {
-      modalTitle.textContent = 'Error Loading Playlist';
+      modalTitle.textContent = 'Error Loading Collection';
       modalSubtitle.textContent = e.message;
       modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);">${e.message}</div>`;
     }

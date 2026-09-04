@@ -601,11 +601,31 @@ def get_playlist_view(playlist_id: str):
         raise HTTPException(status_code=404, detail="Playlist not found")
     return details
 
+@app.get("/api/explore/album/{album_id}")
+def get_album_view(album_id: str):
+    details = discovery.get_album_details(album_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return details
+
 @app.get("/api/explore/search")
-def search_explore(q: str):
-    if not q or not q.strip():
-        return {"results": []}
-    return {"results": discovery.search_tracks(q.strip(), limit=30)}
+def search_explore(q: str, type: Optional[str] = "all"):
+    clean_q = q.strip() if q else ""
+    if not clean_q:
+        return {"results": [], "tracks": [], "albums": []}
+
+    tracks = []
+    albums = []
+    if type in ("all", "tracks"):
+        tracks = discovery.search_tracks(clean_q, limit=25)
+    if type in ("all", "albums"):
+        albums = discovery.search_albums(clean_q, limit=12)
+
+    return {
+        "results": tracks,
+        "tracks": tracks,
+        "albums": albums
+    }
 
 @app.post("/api/download/track")
 def download_single_track_route(req: SingleTrackDownloadRequest, background_tasks: BackgroundTasks):
