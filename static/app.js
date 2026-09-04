@@ -79,6 +79,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const playerMuteBtn = document.getElementById('player-mute-btn');
   const volumeIcon = document.getElementById('volume-icon');
 
+  // Discover & Explore Elements
+  const exploreSearchInput = document.getElementById('explore-search-input');
+  const btnClearExploreSearch = document.getElementById('btn-clear-explore-search');
+  const exploreSearchSection = document.getElementById('explore-search-section');
+  const exploreSearchGrid = document.getElementById('explore-search-grid');
+  const exploreSearchTitle = document.getElementById('explore-search-title');
+  const exploreSearchCount = document.getElementById('explore-search-count');
+  const featuredPlaylistsGrid = document.getElementById('featured-playlists-grid');
+  const trendingTracksGrid = document.getElementById('trending-tracks-grid');
+
+  // Playlist Modal Elements
+  const playlistModal = document.getElementById('playlist-modal');
+  const playlistModalBackdrop = document.getElementById('playlist-modal-backdrop');
+  const modalCloseBtn = document.getElementById('modal-close-btn');
+  const modalCover = document.getElementById('modal-cover');
+  const modalBadge = document.getElementById('modal-badge');
+  const modalTitle = document.getElementById('modal-title');
+  const modalSubtitle = document.getElementById('modal-subtitle');
+  const modalTrackCount = document.getElementById('modal-track-count');
+  const btnModalDownloadAll = document.getElementById('btn-modal-download-all');
+  const modalTracklist = document.getElementById('modal-tracklist');
+  let currentModalPlaylist = null;
+  let exploreSearchDebounce = null;
+
   // Application State
   let librarySongs = [];
   let currentSongIndex = -1;
@@ -111,6 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (target === 'library') {
         loadLibrary();
+      } else if (target === 'discover') {
+        loadExplore();
       }
     });
   });
@@ -542,14 +568,375 @@ document.addEventListener('DOMContentLoaded', () => {
     drawerOverlay.classList.remove('open');
   }
 
-  drawerCloseBtn.addEventListener('click', closeDrawer);
-  drawerOverlay.addEventListener('click', closeDrawer);
+  // ==================== DISCOVER & EXPLORE LOGIC ====================
+  async function loadExplore() {
+    try {
+      const res = await fetch('/api/explore/featured');
+      if (!res.ok) throw new Error('Failed to load explore feed');
+      const data = await res.json();
 
-  drawerPlayBtn.addEventListener('click', () => {
-    if (selectedSong && currentSongIndex >= 0) {
-      playTrack(currentSongIndex);
+      renderFeaturedPlaylists(data.featured || []);
+      renderTrendingTracks(data.trending || []);
+    } catch (e) {
+      console.error('Error loading explore feed:', e);
     }
+  }
+
+  function renderFeaturedPlaylists(playlists) {
+    if (!featuredPlaylistsGrid) return;
+    featuredPlaylistsGrid.innerHTML = '';
+
+    playlists.forEach(pl => {
+      const card = document.createElement('div');
+      card.className = 'playlist-card';
+      card.innerHTML = `
+        <div class="playlist-card-art-wrap">
+          <img class="playlist-card-art" src="${pl.cover_url}" alt="${escapeHtml(pl.title)}" loading="lazy" />
+          <span class="playlist-card-badge">${escapeHtml(pl.badge || 'Playlist')}</span>
+          <div class="playlist-card-overlay">
+            <div class="playlist-card-open-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Explore Songs</span>
+            </div>
+          </div>
+        </div>
+        <div class="playlist-card-info">
+          <div class="playlist-card-title truncate">${escapeHtml(pl.title)}</div>
+          <div class="playlist-card-subtitle truncate">${escapeHtml(pl.subtitle)}</div>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        openPlaylistModal(pl.id);
+      });
+
+      featuredPlaylistsGrid.appendChild(card);
+    });
+  }
+
+  function renderTrendingTracks(tracks) {
+    if (!trendingTracksGrid) return;
+    trendingTracksGrid.innerHTML = '';
+
+    tracks.forEach(track => {
+      const card = createExploreTrackCard(track);
+      trendingTracksGrid.appendChild(card);
+    });
+  }
+
+  function createExploreTrackCard(track) {
+    const card = document.createElement('div');
+    card.className = 'explore-song-card';
+
+    const durationText = track.duration ? formatSeconds(track.duration) : '320k MP3';
+    const coverUrl = track.cover_url || '/static/placeholder.svg';
+
+    card.innerHTML = `
+      <div class="explore-song-thumb-wrap">
+        <img class="explore-song-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+        ${track.preview_url ? `
+          <div class="explore-song-preview-overlay" title="Preview 30s Snippet">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+        ` : ''}
+      </div>
+      <div class="explore-song-info">
+        <div class="explore-song-title truncate" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
+        <div class="explore-song-artist truncate" title="${escapeHtml(track.artist)}">${escapeHtml(track.artist)}</div>
+        <div class="explore-song-meta">${durationText} • Studio Master</div>
+      </div>
+      <div class="explore-song-actions">
+        <button class="btn-quick-download" title="1-Click Download">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Get</span>
+        </button>
+      </div>
+    `;
+
+    // Preview snippet audio play
+    const previewBtn = card.querySelector('.explore-song-preview-overlay');
+    if (previewBtn && track.preview_url) {
+      previewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        previewTrackAudio(track);
+      });
+    }
+
+    // 1-click Download
+    const downloadBtn = card.querySelector('.btn-quick-download');
+    downloadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadSingleTrack(track, downloadBtn);
+    });
+
+    return card;
+  }
+
+  function previewTrackAudio(track) {
+    if (!track.preview_url) return;
+    audioEngine.src = track.preview_url;
+    audioEngine.play().catch(() => {});
+    playerTitle.textContent = `${track.title} (Preview)`;
+    playerArtist.textContent = track.artist;
+    playerCover.src = track.cover_url || '/static/placeholder.svg';
+    isPlaying = true;
+    updatePlayIcon(true);
+    showToast(`Playing 30s preview: ${track.title}`, 'info');
+  }
+
+  async function downloadSingleTrack(track, btnEl) {
+    if (btnEl) {
+      btnEl.classList.add('downloading');
+      btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Saving...</span>`;
+    }
+
+    try {
+      const res = await fetch('/api/download/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          album: track.album || 'Single',
+          cover_url: track.cover_url,
+          query: track.query,
+          quality: settingQuality ? settingQuality.value : '320k',
+          naming: settingNaming ? settingNaming.value : 'title'
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Download request failed');
+      }
+
+      showToast(`Downloading: ${track.title}`, 'success');
+      statusBadge.className = 'hud-status-badge active-download';
+      statusBadge.textContent = 'Downloading';
+
+      if (btnEl) {
+        btnEl.classList.remove('downloading');
+        btnEl.classList.add('downloaded');
+        btnEl.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span>Added</span>`;
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+      if (btnEl) {
+        btnEl.classList.remove('downloading');
+        btnEl.innerHTML = `<span>Retry</span>`;
+      }
+    }
+  }
+
+  // ==================== LIVE SEARCH ====================
+  if (exploreSearchInput) {
+    exploreSearchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      if (btnClearExploreSearch) {
+        btnClearExploreSearch.style.display = q ? 'block' : 'none';
+      }
+      clearTimeout(exploreSearchDebounce);
+      if (!q) {
+        exploreSearchSection.style.display = 'none';
+        return;
+      }
+      exploreSearchDebounce = setTimeout(() => {
+        performExploreSearch(q);
+      }, 250);
+    });
+  }
+
+  if (btnClearExploreSearch) {
+    btnClearExploreSearch.addEventListener('click', () => {
+      exploreSearchInput.value = '';
+      btnClearExploreSearch.style.display = 'none';
+      exploreSearchSection.style.display = 'none';
+    });
+  }
+
+  // Search Hint Pills
+  document.querySelectorAll('.hint-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const q = pill.getAttribute('data-query');
+      if (exploreSearchInput && q) {
+        exploreSearchInput.value = q;
+        if (btnClearExploreSearch) btnClearExploreSearch.style.display = 'block';
+        performExploreSearch(q);
+      }
+    });
   });
+
+  async function performExploreSearch(q) {
+    if (!q) return;
+    try {
+      exploreSearchSection.style.display = 'block';
+      exploreSearchTitle.textContent = `Searching for "${q}"...`;
+      exploreSearchCount.textContent = 'Fetching songs...';
+
+      const res = await fetch(`/api/explore/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const results = data.results || [];
+
+      exploreSearchTitle.textContent = `Results for "${q}"`;
+      exploreSearchCount.textContent = `${results.length} songs found`;
+      exploreSearchGrid.innerHTML = '';
+
+      if (!results.length) {
+        exploreSearchGrid.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><p>No songs found for "${escapeHtml(q)}". Try another artist or song title.</p></div>`;
+        return;
+      }
+
+      results.forEach(track => {
+        const card = createExploreTrackCard(track);
+        exploreSearchGrid.appendChild(card);
+      });
+    } catch (e) {
+      exploreSearchTitle.textContent = 'Search Error';
+      exploreSearchCount.textContent = e.message;
+    }
+  }
+
+  // ==================== PLAYLIST PREVIEW MODAL ====================
+  async function openPlaylistModal(playlistId) {
+    if (!playlistModal) return;
+    playlistModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    modalTitle.textContent = 'Loading playlist...';
+    modalSubtitle.textContent = 'Fetching tracklist and studio metadata...';
+    modalTrackCount.textContent = '...';
+    modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);"><span class="pulse-dot"></span> Loading songs...</div>`;
+
+    try {
+      const res = await fetch(`/api/explore/playlist/${encodeURIComponent(playlistId)}`);
+      if (!res.ok) throw new Error('Failed to load playlist');
+      const data = await res.json();
+      currentModalPlaylist = data;
+
+      modalTitle.textContent = data.title;
+      modalSubtitle.textContent = data.subtitle || 'Curated Studio Collection';
+      modalCover.src = data.cover_url || '/static/placeholder.svg';
+      modalTrackCount.textContent = `${data.track_count || (data.tracks ? data.tracks.length : 0)} tracks`;
+
+      renderModalTracklist(data.tracks || []);
+
+      btnModalDownloadAll.onclick = () => {
+        downloadEntirePlaylist(data);
+      };
+    } catch (e) {
+      modalTitle.textContent = 'Error Loading Playlist';
+      modalSubtitle.textContent = e.message;
+      modalTracklist.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-tertiary);">${e.message}</div>`;
+    }
+  }
+
+  function closePlaylistModal() {
+    if (!playlistModal) return;
+    playlistModal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  if (modalCloseBtn) modalCloseBtn.addEventListener('click', closePlaylistModal);
+  if (playlistModalBackdrop) playlistModalBackdrop.addEventListener('click', closePlaylistModal);
+
+  function renderModalTracklist(tracks) {
+    modalTracklist.innerHTML = '';
+    if (!tracks.length) {
+      modalTracklist.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--text-tertiary);">No tracks found in this collection.</div>`;
+      return;
+    }
+
+    tracks.forEach((track, idx) => {
+      const row = document.createElement('div');
+      row.className = 'modal-track-row';
+      const durationText = track.duration ? formatSeconds(track.duration) : '--:--';
+      const coverUrl = track.cover_url || '/static/placeholder.svg';
+
+      row.innerHTML = `
+        <span class="row-num">${idx + 1}</span>
+        <div class="row-meta">
+          <img class="row-thumb" src="${coverUrl}" onerror="this.src='/static/placeholder.svg'" alt="Cover" />
+          <div class="row-text">
+            <div class="row-title truncate" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
+            <div class="row-artist truncate" title="${escapeHtml(track.artist)}">${escapeHtml(track.artist)}</div>
+          </div>
+        </div>
+        <div class="row-album truncate" title="${escapeHtml(track.album || '')}">${escapeHtml(track.album || '—')}</div>
+        <div class="row-time">${durationText}</div>
+        <div class="row-actions">
+          ${track.preview_url ? `
+            <button class="btn-row-preview" title="Preview Audio">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          ` : ''}
+          <button class="btn-row-download" title="Download This Track">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+        </div>
+      `;
+
+      // Preview audio listener
+      const prevBtn = row.querySelector('.btn-row-preview');
+      if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+          previewTrackAudio(track);
+        });
+      }
+
+      // Download single track listener
+      const dlBtn = row.querySelector('.btn-row-download');
+      dlBtn.addEventListener('click', () => {
+        downloadSingleTrack(track, dlBtn);
+      });
+
+      modalTracklist.appendChild(row);
+    });
+  }
+
+  async function downloadEntirePlaylist(playlistData) {
+    if (!playlistData || !playlistData.tracks || !playlistData.tracks.length) return;
+
+    closePlaylistModal();
+
+    try {
+      const res = await fetch('/api/download/playlist-tracks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: playlistData.title,
+          tracks: playlistData.tracks,
+          threads: parseInt(settingThreads ? settingThreads.value : 3) || 3,
+          quality: settingQuality ? settingQuality.value : '320k',
+          naming: settingNaming ? settingNaming.value : 'title'
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to start batch download');
+      }
+
+      showToast(`Downloading "${playlistData.title}" (${playlistData.tracks.length} tracks)...`, 'success');
+      btnStop.style.display = 'inline-flex';
+      statusBadge.className = 'hud-status-badge active-download';
+      statusBadge.textContent = 'Downloading';
+
+      // Switch to Downloader tab to show live progress HUD
+      const dlTabBtn = document.querySelector('.nav-item[data-tab="downloader"]');
+      if (dlTabBtn) dlTabBtn.click();
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  }
 
   // ==================== AUDIO PLAYER ENGINE ====================
   function updateScrubberFill(pct) {
@@ -929,6 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
       playPrevTrack();
     } else if (e.code === 'Escape') {
       closeDrawer();
+      closePlaylistModal();
     }
   });
 
@@ -965,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
-  // Hash-based Tab Routing (e.g. #library, #settings)
+  // Hash-based Tab Routing (e.g. #library, #settings, #discover)
   function handleHash() {
     const hash = window.location.hash.replace('#', '');
     if (hash) {
@@ -979,6 +1367,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial Load
   initEventStream();
+  loadExplore();
   loadLibrary();
   handleHash();
   updateShuffleUI();

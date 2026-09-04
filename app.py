@@ -39,6 +39,7 @@ from download_playlist import (
     DEFAULT_PLAYLIST_URL,
     DEFAULT_OUTPUT_FOLDER,
 )
+import discovery
 from fix_metadata import process_file as enrich_single_file, fetch_itunes_metadata
 
 app = FastAPI(title="SpotiDownloader Studio")
@@ -121,6 +122,22 @@ class DownloadRequest(BaseModel):
     threads: int = 3
     quality: str = "320k"
     sort: str = "latest"
+    naming: str = "title"
+
+class SingleTrackDownloadRequest(BaseModel):
+    title: str
+    artist: str
+    album: Optional[str] = "Single"
+    cover_url: Optional[str] = None
+    query: Optional[str] = None
+    quality: str = "320k"
+    naming: str = "title"
+
+class BatchTracksDownloadRequest(BaseModel):
+    title: str
+    tracks: List[Dict]
+    threads: int = 3
+    quality: str = "320k"
     naming: str = "title"
 
 class EnrichRequest(BaseModel):
@@ -354,6 +371,176 @@ def run_enrich_worker(req: EnrichRequest):
             state.status_message = "Metadata enrichment complete!"
         state.notify("enrich_complete", {"updated": success_count, "total": total})
 
+def run_single_song_worker(req: SingleTrackDownloadRequest):
+    ffmpeg_bin = find_ffmpeg()
+    track_title = f"{req.artist} - {req.title}"
+    state.reset_download_state(track_title)
+    with state.lock:
+        state.playlist_title = track_title
+        state.total_tracks = 1
+        state.status_message = f"Downloading \"{req.title}\"..."
+
+    state.notify("playlist_loaded", {
+        "title": track_title,
+        "total": 1
+    })
+
+    track_dict = {
+        "title": req.title,
+        "artist": req.artist,
+        "album": req.album or "Single",
+        "cover_url": req.cover_url or "",
+        "track_number": 1,
+        "query": req.query or f"{req.artist} - {req.title} Official Audio"
+    }
+
+    try:
+        enriched = fetch_itunes_metadata(req.artist, req.title)
+        success, status, filename = download_single_track(
+            track_dict,
+            SONGS_DIR,
+            ffmpeg_bin,
+            req.quality,
+            req.naming,
+            None,
+            enriched
+        )
+
+        with state.lock:
+            if status == "skipped":
+                state.skipped_count = 1
+                state.status_message = f"Already downloaded: {req.title}"
+            elif success:
+                state.downloaded_count = 1
+                state.status_message = f"Downloaded: {req.title}"
+            else:
+                state.failed_count = 1
+                state.status_message = f"Failed to download: {req.title}"
+
+            song_item = {
+                "filename": filename,
+                "title": req.title,
+                "artist": req.artist,
+                "album": req.album,
+                "cover_url": req.cover_url,
+                "status": status,
+                "timestamp": time.time()
+            }
+            state.recent_completed.insert(0, song_item)
+
+        state.notify("progress", {
+            "processed": 1,
+            "total": 1,
+            "percent": 100,
+            "downloaded": state.downloaded_count,
+            "skipped": state.skipped_count,
+            "failed": state.failed_count,
+            "last_song": song_item
+        })
+    except Exception as e:
+        with state.lock:
+            state.failed_count = 1
+            state.status_message = f"Error: {e}"
+        state.notify("song_failed", {"title": req.title, "error": str(e)})
+    finally:
+        with state.lock:
+            state.is_downloading = False
+        state.notify("completed", {
+            "downloaded": state.downloaded_count,
+            "skipped": state.skipped_count,
+            "failed": state.failed_count,
+            "time": round(time.time() - state.start_time, 1)
+        })
+
+def run_batch_songs_worker(req: BatchTracksDownloadRequest):
+    ffmpeg_bin = find_ffmpeg()
+    tracks = req.tracks
+    if not tracks:
+        return
+
+    state.reset_download_state(req.title)
+    with state.lock:
+        state.playlist_title = req.title
+        state.total_tracks = len(tracks)
+        state.status_message = f"Downloading \"{req.title}\" ({len(tracks)} tracks)"
+
+    state.notify("playlist_loaded", {
+        "title": req.title,
+        "total": len(tracks)
+    })
+
+    enriched_cache = enrich_tracks_for_download(tracks, threads=min(4, req.threads))
+
+    with ThreadPoolExecutor(max_workers=req.threads) as executor:
+        future_to_track = {
+            executor.submit(
+                download_single_track,
+                track,
+                SONGS_DIR,
+                ffmpeg_bin,
+                req.quality,
+                req.naming,
+                None,
+                enriched_cache.get((track.get('artist', 'Unknown Artist'), track.get('title', 'Unknown Title')))
+            ): track
+            for track in tracks
+        }
+
+        for future in as_completed(future_to_track):
+            if state.should_stop:
+                break
+
+            track = future_to_track[future]
+            try:
+                success, status, filename = future.result()
+                with state.lock:
+                    if status == "skipped":
+                        state.skipped_count += 1
+                    elif success:
+                        state.downloaded_count += 1
+                    else:
+                        state.failed_count += 1
+
+                    song_item = {
+                        "filename": filename,
+                        "title": track.get("title"),
+                        "artist": track.get("artist"),
+                        "album": track.get("album"),
+                        "cover_url": track.get("cover_url"),
+                        "status": status,
+                        "timestamp": time.time()
+                    }
+                    state.recent_completed.insert(0, song_item)
+                    if len(state.recent_completed) > 100:
+                        state.recent_completed.pop()
+
+                processed = state.downloaded_count + state.skipped_count + state.failed_count
+                pct = int((processed / max(1, state.total_tracks)) * 100)
+
+                state.notify("progress", {
+                    "processed": processed,
+                    "total": state.total_tracks,
+                    "percent": pct,
+                    "downloaded": state.downloaded_count,
+                    "skipped": state.skipped_count,
+                    "failed": state.failed_count,
+                    "last_song": song_item
+                })
+            except Exception as e:
+                with state.lock:
+                    state.failed_count += 1
+                state.notify("song_failed", {"title": track.get("title"), "error": str(e)})
+
+    with state.lock:
+        state.is_downloading = False
+        state.status_message = "Download completed!" if not state.should_stop else "Download stopped."
+    state.notify("completed", {
+        "downloaded": state.downloaded_count,
+        "skipped": state.skipped_count,
+        "failed": state.failed_count,
+        "time": round(time.time() - state.start_time, 1)
+    })
+
 # REST Endpoints
 @app.get("/api/status")
 def get_status():
@@ -399,6 +586,40 @@ def start_enrich(req: EnrichRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Metadata enrichment is already in progress.")
     background_tasks.add_task(run_enrich_worker, req)
     return {"status": "enriching_started"}
+
+@app.get("/api/explore/featured")
+def get_featured():
+    return {
+        "featured": discovery.get_featured_playlists(),
+        "trending": discovery.get_trending_tracks(limit=15)
+    }
+
+@app.get("/api/explore/playlist/{playlist_id}")
+def get_playlist_view(playlist_id: str):
+    details = discovery.get_playlist_details(playlist_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    return details
+
+@app.get("/api/explore/search")
+def search_explore(q: str):
+    if not q or not q.strip():
+        return {"results": []}
+    return {"results": discovery.search_tracks(q.strip(), limit=30)}
+
+@app.post("/api/download/track")
+def download_single_track_route(req: SingleTrackDownloadRequest, background_tasks: BackgroundTasks):
+    if state.is_downloading:
+        raise HTTPException(status_code=400, detail="A download is already in progress.")
+    background_tasks.add_task(run_single_song_worker, req)
+    return {"status": "started", "title": req.title, "artist": req.artist}
+
+@app.post("/api/download/playlist-tracks")
+def download_batch_tracks_route(req: BatchTracksDownloadRequest, background_tasks: BackgroundTasks):
+    if state.is_downloading:
+        raise HTTPException(status_code=400, detail="A download is already in progress.")
+    background_tasks.add_task(run_batch_songs_worker, req)
+    return {"status": "started", "title": req.title, "count": len(req.tracks)}
 
 @app.get("/api/songs")
 def list_songs(search: Optional[str] = None):

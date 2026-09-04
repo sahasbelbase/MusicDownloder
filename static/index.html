@@ -36,7 +36,13 @@
 
         <!-- Navigation Tabs -->
         <nav class="nav-pills">
-          <button class="nav-item active" data-tab="downloader">
+          <button class="nav-item active" data-tab="discover">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span>Discover</span>
+          </button>
+          <button class="nav-item" data-tab="downloader">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -74,8 +80,76 @@
 
       <!-- Main Content -->
       <main class="main-body">
+        <!-- ==================== TAB 0: DISCOVER / CHARTS ==================== -->
+        <section id="tab-discover" class="tab-view active">
+          <!-- Live Music Search Box -->
+          <div class="discover-search-box glass">
+            <div class="discover-search-wrap">
+              <div class="discover-search-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                id="explore-search-input"
+                placeholder="Search any song, artist, or album (e.g. Adele, Bohemian Rhapsody, Eminem, Coldplay)..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button class="clear-search-btn" id="btn-clear-explore-search" style="display: none;">&times;</button>
+            </div>
+            <div class="discover-hint-pills">
+              <span class="hint-label">Trending:</span>
+              <button class="hint-pill" data-query="Top Hits 2026">Top Hits 2026</button>
+              <button class="hint-pill" data-query="Bohemian Rhapsody">Bohemian Rhapsody</button>
+              <button class="hint-pill" data-query="The Weeknd">The Weeknd</button>
+              <button class="hint-pill" data-query="Adele">Adele</button>
+              <button class="hint-pill" data-query="Billie Eilish">Billie Eilish</button>
+            </div>
+          </div>
+
+          <!-- Live Search Results Section (Shown dynamically when searching) -->
+          <div id="explore-search-section" class="explore-section" style="display: none;">
+            <div class="explore-section-header">
+              <div>
+                <h3 id="explore-search-title">Search Results</h3>
+                <p id="explore-search-count">0 songs found</p>
+              </div>
+            </div>
+            <div class="explore-songs-grid" id="explore-search-grid"></div>
+          </div>
+
+          <!-- Curated Featured Playlists & Charts -->
+          <div class="explore-section">
+            <div class="explore-section-header">
+              <div>
+                <h3>Curated Charts & Playlists</h3>
+                <p>Click any playlist cover to view all songs, preview audio, and download full playlist or single tracks</p>
+              </div>
+            </div>
+            <div class="featured-playlists-grid" id="featured-playlists-grid">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Global Trending Chart Tracks -->
+          <div class="explore-section">
+            <div class="explore-section-header">
+              <div>
+                <h3>🔥 Trending Right Now</h3>
+                <p>Live global chart leaders — audio preview and 1-click downloads directly to your library</p>
+              </div>
+            </div>
+            <div class="trending-tracks-grid" id="trending-tracks-grid">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </section>
+
         <!-- ==================== TAB 1: DOWNLOADER ==================== -->
-        <section id="tab-downloader" class="tab-view active">
+        <section id="tab-downloader" class="tab-view">
           <!-- Hero Search & Action Bar -->
           <div class="hero-box glass">
             <div class="url-input-wrap">
@@ -432,9 +506,53 @@
       </footer>
     </div>
 
+    <!-- Playlist Preview Modal -->
+    <div id="playlist-modal" class="modal-root" style="display: none;">
+      <div class="modal-backdrop" id="playlist-modal-backdrop"></div>
+      <div class="modal-window glass">
+        <button class="modal-close-icon" id="modal-close-btn" title="Close Modal">&times;</button>
+        <div class="modal-hero">
+          <img id="modal-cover" src="/static/placeholder.svg" alt="Playlist Art" class="modal-hero-cover" />
+          <div class="modal-hero-info">
+            <span class="modal-badge" id="modal-badge">Curated Collection</span>
+            <h2 id="modal-title" class="modal-title">Today's Top Hits</h2>
+            <p id="modal-subtitle" class="modal-subtitle">The hottest songs right now worldwide</p>
+            <div class="modal-stats-row">
+              <span class="modal-stat-pill" id="modal-track-count">50 tracks</span>
+              <span class="modal-stat-pill">320 kbps Master Quality</span>
+              <span class="modal-stat-pill">Full ID3 Studio Tags</span>
+            </div>
+            <div class="modal-cta-row">
+              <button class="btn-download-all" id="btn-modal-download-all">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>Download Entire Playlist</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-tracklist-section">
+          <div class="modal-tracklist-header">
+            <span class="th-num">#</span>
+            <span class="th-title">Title & Artist</span>
+            <span class="th-album">Album</span>
+            <span class="th-time">Time</span>
+            <span class="th-actions">Actions</span>
+          </div>
+          <div class="modal-tracklist" id="modal-tracklist">
+            <!-- Populated dynamically by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Notification Toasts -->
     <div id="toast-container" class="toast-stack"></div>
 
-    <script src="/static/app.js?v=3.0.2"></script>
+    <script src="/static/app.js?v=3.2.0"></script>
   </body>
 </html>
