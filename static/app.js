@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressBar = document.getElementById('progress-bar');
   const streamFeed = document.getElementById('stream-feed');
   const navSongCount = document.getElementById('nav-song-count');
+  const mobileNavSongCount = document.getElementById('mobile-nav-song-count');
 
   // Settings
   const settingThreads = document.getElementById('setting-threads');
@@ -165,22 +166,29 @@ document.addEventListener('DOMContentLoaded', () => {
     youtube: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`
   };
 
-  // ==================== NAVIGATION TABS ====================
-  document.querySelectorAll('.nav-item').forEach(btn => {
+  // ==================== NAVIGATION TABS (DESKTOP + MOBILE) ====================
+  function activateTab(target) {
+    document.querySelectorAll('.nav-item').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-tab') === target);
+    });
+    document.querySelectorAll('.mobile-nav-item').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-tab') === target);
+    });
+    document.querySelectorAll('.tab-view').forEach(v => {
+      v.classList.toggle('active', v.id === `tab-${target}`);
+    });
+
+    if (target === 'library') {
+      loadLibrary();
+    } else if (target === 'discover') {
+      loadExplore();
+    }
+  }
+
+  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
-
-      btn.classList.add('active');
       const target = btn.getAttribute('data-tab');
-      const view = document.getElementById(`tab-${target}`);
-      if (view) view.classList.add('active');
-
-      if (target === 'library') {
-        loadLibrary();
-      } else if (target === 'discover') {
-        loadExplore();
-      }
+      if (target) activateTab(target);
     });
   });
 
@@ -428,6 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       rawLibrarySongs = await res.json();
       navSongCount.textContent = rawLibrarySongs.length;
+      if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
       libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
 
       applySortAndFilter();
@@ -1886,6 +1895,42 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dockTrackInfo) {
     dockTrackInfo.addEventListener('click', () => {
       openFullscreenPlayer();
+    });
+  }
+  if (playerDock) {
+    playerDock.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-transport') || e.target.closest('.btn-play-pause') || e.target.closest('.dock-volume-col') || e.target.closest('input')) {
+        return;
+      }
+      openFullscreenPlayer();
+    });
+  }
+
+  // Mobile swipe down gesture to dismiss fullscreen player
+  let fsTouchStartY = 0;
+  if (fullscreenPlayer) {
+    fullscreenPlayer.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length > 0) {
+        fsTouchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    fullscreenPlayer.addEventListener('touchend', (e) => {
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        const fsTouchEndY = e.changedTouches[0].clientY;
+        if (fsTouchEndY - fsTouchStartY > 80) {
+          closeFullscreenPlayer();
+        }
+      }
+    }, { passive: true });
+  }
+
+  // Mobile drawer drag bar to dismiss track drawer
+  const drawerDragBar = document.querySelector('.drawer-drag-bar');
+  if (drawerDragBar) {
+    drawerDragBar.addEventListener('click', () => {
+      if (trackDrawer) trackDrawer.classList.remove('open');
+      if (drawerOverlay) drawerOverlay.classList.remove('open');
     });
   }
 

@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0e14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Music Studio | Premium 320kbps Downloader</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +15,7 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="stylesheet" href="/static/style.css?v=3.1.0" />
+    <link rel="stylesheet" href="/static/style.css?v=3.2.0" />
   </head>
   <body>
     <!-- Subtle Ambient Backdrop Glows -->
@@ -430,62 +434,7 @@
         </section>
       </main>
 
-      <!-- Slide-in Track Inspector Drawer -->
-      <div class="drawer-overlay" id="drawer-overlay"></div>
-      <aside class="track-drawer glass" id="track-drawer">
-        <button class="drawer-close-btn" id="drawer-close-btn" title="Close">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
 
-        <div class="drawer-content">
-          <div class="drawer-art-wrap">
-            <img id="drawer-cover" src="/static/placeholder.svg" alt="Album Art" />
-            <span class="drawer-bitrate-badge" id="drawer-bitrate">320 kbps</span>
-          </div>
-
-          <div class="drawer-meta-header">
-            <h2 id="drawer-title" class="drawer-title">Track Title</h2>
-            <p id="drawer-artist" class="drawer-artist">Artist Name</p>
-          </div>
-
-          <div class="drawer-pills">
-            <span class="pill-tag" id="drawer-genre">Genre</span>
-            <span class="pill-tag" id="drawer-year">Year</span>
-            <span class="pill-tag" id="drawer-size">0 MB</span>
-          </div>
-
-          <div class="drawer-detail-table">
-            <div class="detail-item">
-              <span class="detail-k">Album</span>
-              <span class="detail-v" id="drawer-album">Album Name</span>
-            </div>
-            <div class="detail-item" id="drawer-collab-row" style="display: none;">
-              <span class="detail-k">Featuring</span>
-              <span class="detail-v" id="drawer-collab">--</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-k">Duration</span>
-              <span class="detail-v" id="drawer-duration">0:00</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-k">File</span>
-              <span class="detail-v monospace truncate" id="drawer-filename">track.mp3</span>
-            </div>
-          </div>
-
-          <div class="drawer-actions">
-            <button class="btn-drawer-play" id="drawer-play-btn">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              <span>Play Now</span>
-            </button>
-          </div>
-        </div>
-      </aside>
 
       <!-- Persistent Floating Glass Audio Dock -->
       <footer class="player-dock glass" id="player-bar">
@@ -569,6 +518,64 @@
         <audio id="audio-engine" preload="auto"></audio>
       </footer>
     </div>
+
+    <!-- Slide-in Track Inspector Drawer (Top-level stacking context) -->
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <aside class="track-drawer glass" id="track-drawer">
+      <div class="drawer-drag-bar"></div>
+      <button class="drawer-close-btn" id="drawer-close-btn" title="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+
+      <div class="drawer-content">
+        <div class="drawer-art-wrap">
+          <img id="drawer-cover" src="/static/placeholder.svg" alt="Album Art" />
+          <span class="drawer-bitrate-badge" id="drawer-bitrate">320 kbps</span>
+        </div>
+
+        <div class="drawer-meta-header">
+          <h2 id="drawer-title" class="drawer-title">Track Title</h2>
+          <p id="drawer-artist" class="drawer-artist">Artist Name</p>
+        </div>
+
+        <div class="drawer-pills">
+          <span class="pill-tag" id="drawer-genre">Genre</span>
+          <span class="pill-tag" id="drawer-year">Year</span>
+          <span class="pill-tag" id="drawer-size">0 MB</span>
+        </div>
+
+        <div class="drawer-detail-table">
+          <div class="detail-item">
+            <span class="detail-k">Album</span>
+            <span class="detail-v" id="drawer-album">Album Name</span>
+          </div>
+          <div class="detail-item" id="drawer-collab-row" style="display: none;">
+            <span class="detail-k">Featuring</span>
+            <span class="detail-v" id="drawer-collab">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-k">Duration</span>
+            <span class="detail-v" id="drawer-duration">0:00</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-k">File</span>
+            <span class="detail-v monospace truncate" id="drawer-filename">track.mp3</span>
+          </div>
+        </div>
+
+        <div class="drawer-actions">
+          <button class="btn-drawer-play" id="drawer-play-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span>Play Now</span>
+          </button>
+        </div>
+      </div>
+    </aside>
 
     <!-- Playlist Preview Modal -->
     <div id="playlist-modal" class="modal-root" style="display: none;">
@@ -721,9 +728,45 @@
       </div>
     </div>
 
+    <!-- Mobile Bottom Navigation Dock (Visible on Mobile <= 768px) -->
+    <nav class="mobile-bottom-nav glass" id="mobile-bottom-nav">
+      <button class="mobile-nav-item active" data-tab="discover">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+        <span>Discover</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="downloader">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span>Download</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="library">
+        <div class="mobile-nav-icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2" />
+            <polyline points="2 17 12 22 22 17" />
+            <polyline points="2 12 12 17 22 12" />
+          </svg>
+          <span class="count-badge mobile-count-badge" id="mobile-nav-song-count">0</span>
+        </div>
+        <span>Library</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
     <!-- Notification Toasts -->
     <div id="toast-container" class="toast-stack"></div>
 
-    <script src="/static/app.js?v=3.3.0"></script>
+    <script src="/static/app.js?v=3.4.0"></script>
   </body>
 </html>
