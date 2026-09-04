@@ -1239,6 +1239,7 @@ body {
   gap: 16px;
 }
 .ctrl-btn {
+  position: relative;
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -1251,6 +1252,39 @@ body {
 .ctrl-btn:hover {
   color: var(--text-primary);
   transform: scale(1.1);
+}
+.ctrl-btn.active {
+  color: var(--emerald);
+}
+.ctrl-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+}
+.repeat-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: var(--emerald);
+  color: #03150d;
+  font-size: 8px;
+  font-weight: 900;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 0 6px var(--emerald-glow);
+}
+.repeat-badge.show {
+  display: flex;
 }
 
 .ctrl-btn-play {
@@ -1286,9 +1320,47 @@ body {
   text-align: center;
 }
 .range-wrap {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
+}
+.scrubber-tooltip {
+  position: absolute;
+  top: -26px;
+  left: 0;
+  transform: translateX(-50%);
+  background: rgba(18, 20, 29, 0.95);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+.range-wrap:hover .scrubber-tooltip {
+  opacity: 1;
+}
+
+.song-card.playing {
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.25) !important;
+}
+.song-card.playing .song-card-title {
+  color: var(--emerald) !important;
+}
+.song-row.playing {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+.song-row.playing .song-row-title {
+  color: var(--emerald) !important;
 }
 input[type="range"] {
   -webkit-appearance: none;

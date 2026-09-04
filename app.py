@@ -18,7 +18,7 @@ from threading import Thread, Lock
 from typing import Optional, List, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +50,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_no_cache_header(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 SONGS_DIR = DEFAULT_OUTPUT_FOLDER
 os.makedirs(SONGS_DIR, exist_ok=True)
@@ -490,12 +499,77 @@ def get_song_artwork(filename: str):
     svg = """<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.5"><rect width="100%" height="100%" fill="#18181b"/><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v9"/></svg>"""
     return StreamingResponse(iter([svg.encode('utf-8')]), media_type="image/svg+xml")
 
-@app.get("/api/songs/audio/{filename}")
-def stream_audio(filename: str):
+@app.api_route("/api/songs/audio/{filename}", methods=["GET", "HEAD"])
+def stream_audio(filename: str, request: Request):
     filepath = os.path.join(SONGS_DIR, filename)
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Song not found")
-    return FileResponse(filepath, media_type="audio/mpeg", filename=filename)
+
+    stat = os.stat(filepath)
+    file_size = stat.st_size
+
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+                "Content-Type": "audio/mpeg",
+            }
+        )
+
+    range_header = request.headers.get("range")
+
+    if not range_header:
+        return FileResponse(
+            filepath,
+            media_type="audio/mpeg",
+            headers={"Accept-Ranges": "bytes"}
+        )
+
+    try:
+        range_value = range_header.strip().lower()
+        if not range_value.startswith("bytes="):
+            return FileResponse(filepath, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
+
+        byte_range = range_value[6:].split("-")
+        start = int(byte_range[0]) if byte_range[0] else 0
+        end = int(byte_range[1]) if len(byte_range) > 1 and byte_range[1] else file_size - 1
+
+        if start >= file_size or end >= file_size or start > end:
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"}
+            )
+
+        chunk_size = (end - start) + 1
+
+        def iterfile(start_pos: int, length: int):
+            with open(filepath, mode="rb") as f:
+                f.seek(start_pos)
+                remaining = length
+                chunk = 64 * 1024
+                while remaining > 0:
+                    read_size = min(chunk, remaining)
+                    data = f.read(read_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": "audio/mpeg",
+        }
+        return StreamingResponse(
+            iterfile(start, chunk_size),
+            status_code=206,
+            headers=headers
+        )
+    except Exception:
+        return FileResponse(filepath, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
 
 @app.post("/api/open-folder")
 def open_songs_folder():
