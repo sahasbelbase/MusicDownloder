@@ -1,290 +1,421 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpotiDownloader Studio | 320kbps High-Speed Music Suite</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div class="glow-orb orb-1"></div>
-    <div class="glow-orb orb-2"></div>
-    <div class="glow-orb orb-3"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpotiStudio | Premium 320kbps Downloader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <!-- Subtle Ambient Backdrop Glows -->
+    <div class="ambient-glow orb-emerald"></div>
+    <div class="ambient-glow orb-violet"></div>
+    <div class="ambient-glow orb-cyan"></div>
 
-    <div class="app-container">
-        <!-- Top Navigation -->
-        <header class="app-header glass">
-            <div class="brand-wrapper">
-                <div class="brand-icon">
-                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M7 9.5c3-1.5 7-1.5 10 0M8 12.5c2.5-1 6-1 8.5 0M9 15.5c2-.5 4.5-.5 6.5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
+    <div class="app-layout">
+      <!-- Minimalist Header -->
+      <header class="app-navbar glass">
+        <div class="brand">
+          <div class="brand-glyph">
+            <span class="pulse-dot"></span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.627.627 0 0 1-.863.208c-2.36-1.442-5.33-1.768-8.828-.97a.625.625 0 1 1-.277-1.22c3.827-.874 7.113-.502 9.76 1.118a.625.625 0 0 1 .208.864zm1.224-2.723a.784.784 0 0 1-1.08.258c-2.702-1.66-6.822-2.14-10.017-1.171a.784.784 0 1 1-.452-1.501c3.65-1.107 8.204-.576 11.29 1.334a.783.783 0 0 1 .259 1.08zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.94.94 0 1 1-.55-1.801c3.528-1.07 9.408-.86 13.136 1.353a.941.941 0 0 1-.969 1.604z" />
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-name">SpotiStudio</span>
+            <span class="brand-pill">320K</span>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-pills">
+          <button class="nav-item active" data-tab="downloader">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Downloader</span>
+          </button>
+          <button class="nav-item" data-tab="library">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+            <span>Library</span>
+            <span class="count-badge" id="nav-song-count">0</span>
+          </button>
+          <button class="nav-item" data-tab="settings">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <!-- Right Quick Actions -->
+        <div class="nav-actions">
+          <button class="icon-btn" id="btn-open-folder" title="Open Songs Folder in Finder">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main-body">
+        <!-- ==================== TAB 1: DOWNLOADER ==================== -->
+        <section id="tab-downloader" class="tab-view active">
+          <!-- Hero Search & Action Bar -->
+          <div class="hero-box glass">
+            <div class="url-input-wrap">
+              <div class="platform-icon" id="platform-icon" title="Paste URL to auto-detect platform">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                id="input-url"
+                placeholder="Paste Spotify or YouTube Music playlist / track link..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button class="paste-btn" id="btn-paste" title="Paste from clipboard">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>Paste</span>
+              </button>
+              <button class="download-action-btn" id="btn-download">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                <span>Download</span>
+              </button>
+            </div>
+
+            <div class="chips-row">
+              <button class="chip" id="chip-spotify-hit">🔥 Top Hits</button>
+              <button class="chip" id="chip-single-test">🎧 Single Track</button>
+              <button class="chip chip-accent" id="btn-enrich-all">✨ Enrich Studio Art & Tags</button>
+            </div>
+          </div>
+
+          <!-- Unified HUD Status & Telemetry Bar -->
+          <div class="hud-bar glass" id="hud-bar">
+            <div class="hud-left">
+              <div class="hud-status-badge" id="status-badge">Idle</div>
+              <div class="hud-meta">
+                <span class="hud-title truncate" id="metric-playlist-name">Ready</span>
+                <span class="hud-sub truncate" id="metric-status-msg">Enter a URL above to start</span>
+              </div>
+            </div>
+
+            <div class="hud-center">
+              <div class="hud-progress-info">
+                <span class="hud-pct" id="metric-percent">0%</span>
+                <span class="hud-count" id="metric-total">0 / 0</span>
+              </div>
+              <div class="hud-track">
+                <div class="hud-fill" id="progress-bar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="hud-right">
+              <div class="telemetry-pill text-green" title="Newly downloaded songs">
+                <span class="dot green-dot"></span>
+                <span id="metric-downloaded">0</span> new
+              </div>
+              <div class="telemetry-pill text-yellow" title="Already downloaded songs (skipped)">
+                <span class="dot yellow-dot"></span>
+                <span id="metric-skipped">0</span> cached
+              </div>
+              <div class="telemetry-pill text-cyan" title="Download speed">
+                <span id="metric-speed">0.0</span>/m
+              </div>
+              <button class="btn-stop-pill" id="btn-stop-download" style="display: none;" title="Stop download">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <rect x="5" y="5" width="14" height="14" rx="2" />
+                </svg>
+                Stop
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Activity Feed -->
+          <div class="feed-wrapper">
+            <div class="feed-header">
+              <div class="feed-title-col">
+                <h3>Live Activity</h3>
+                <span class="live-beacon"></span>
+              </div>
+              <span class="feed-hint" id="feed-hint">Real-time track progress</span>
+            </div>
+
+            <div class="feed-list" id="stream-feed">
+              <div class="empty-state glass">
+                <div class="empty-icon-wrap">
+                  <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="3" />
+                    <line x1="12" y1="2" x2="12" y2="4" />
+                  </svg>
                 </div>
+                <p>Waiting for download trigger</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 2: LIBRARY ==================== -->
+        <section id="tab-library" class="tab-view">
+          <div class="library-toolbar glass">
+            <div class="library-search-wrap">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                id="library-search"
+                placeholder="Search tracks, artists, albums, or genres..."
+                autocomplete="off"
+              />
+              <button class="clear-search-btn" id="btn-clear-search" style="display: none;">&times;</button>
+            </div>
+
+            <div class="library-controls">
+              <span class="library-counter" id="library-count-label">0 tracks</span>
+              <div class="view-switch">
+                <button class="view-toggle-btn active" id="view-grid-btn" title="Grid View">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                </button>
+                <button class="view-toggle-btn" id="view-list-btn" title="List View">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <button class="icon-action-btn" id="btn-refresh-library" title="Refresh Library">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Song List / Grid -->
+          <div class="library-container grid-mode" id="library-container">
+            <!-- Cards or rows populated by JS -->
+          </div>
+        </section>
+
+        <!-- ==================== TAB 3: SETTINGS ==================== -->
+        <section id="tab-settings" class="tab-view">
+          <div class="settings-grid">
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">⚡</div>
                 <div>
-                    <h1 class="brand-title">SpotiDownloader <span class="badge-pro">STUDIO</span></h1>
-                    <p class="brand-subtitle">320kbps High-Speed Audio & HD Metadata Engine</p>
+                  <h4>Audio Quality</h4>
+                  <p>Target MP3 encoding bitrate</p>
                 </div>
+              </div>
+              <select id="setting-quality" class="custom-select">
+                <option value="320k" selected>320 kbps MP3 (Master Quality)</option>
+                <option value="256k">256 kbps MP3 (Balanced)</option>
+                <option value="192k">192 kbps MP3 (Compact)</option>
+              </select>
             </div>
 
-            <nav class="nav-tabs">
-                <button class="tab-btn active" data-tab="downloader">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Live Downloader
-                </button>
-                <button class="tab-btn" data-tab="library">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-                    My Library (<span id="nav-song-count">0</span>)
-                </button>
-                <button class="tab-btn" data-tab="settings">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    Settings
-                </button>
-            </nav>
-
-            <div class="header-actions">
-                <button class="btn btn-secondary btn-icon" id="btn-open-folder" title="Open Songs Folder in Finder">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    <span>Open Folder</span>
-                </button>
-            </div>
-        </header>
-
-        <!-- Main Workspace -->
-        <main class="main-content">
-            <!-- TAB 1: DOWNLOADER -->
-            <section id="tab-downloader" class="tab-pane active">
-                <!-- Hero Input Card -->
-                <div class="hero-card glass">
-                    <div class="input-container">
-                        <div class="input-icon">
-                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        </div>
-                        <input type="text" id="input-url" placeholder="Paste Spotify or YouTube Music Playlist / Track URL..." autocomplete="off">
-                        <button class="btn btn-secondary btn-sm" id="btn-paste">
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                            Paste
-                        </button>
-                        <button class="btn btn-primary" id="btn-download">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            <span>Start Download</span>
-                        </button>
-                    </div>
-
-                    <div class="quick-chips">
-                        <span class="chip-label">Quick Actions:</span>
-                        <button class="chip" id="chip-my-list">🎵 My Playlist (1,608 Tracks)</button>
-                        <button class="chip" id="chip-spotify-hit">🟢 Spotify Hits</button>
-                        <button class="chip" id="chip-single-test">🎧 Single Track Test</button>
-                    </div>
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">🧵</div>
+                <div>
+                  <h4>Concurrent Streams</h4>
+                  <p>Simultaneous worker downloads</p>
                 </div>
-
-                <!-- Live Status & Metrics Grid -->
-                <div class="metrics-grid">
-                    <div class="metric-card glass">
-                        <div class="metric-header">
-                            <span class="metric-title">Playlist Status</span>
-                            <span class="status-indicator" id="status-badge">Idle</span>
-                        </div>
-                        <div class="metric-value truncate" id="metric-playlist-name">My_list</div>
-                        <div class="metric-footer" id="metric-status-msg">Ready to start download</div>
-                    </div>
-
-                    <div class="metric-card glass">
-                        <div class="metric-header">
-                            <span class="metric-title">Newly Downloaded</span>
-                            <div class="metric-icon green">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                            </div>
-                        </div>
-                        <div class="metric-value text-green" id="metric-downloaded">0</div>
-                        <div class="metric-footer"><span id="metric-speed">0.0</span> songs/min</div>
-                    </div>
-
-                    <div class="metric-card glass">
-                        <div class="metric-header">
-                            <span class="metric-title">Already Existed</span>
-                            <div class="metric-icon yellow">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                            </div>
-                        </div>
-                        <div class="metric-value text-yellow" id="metric-skipped">0</div>
-                        <div class="metric-footer">Smart Resumed (0ms skip)</div>
-                    </div>
-
-                    <div class="metric-card glass">
-                        <div class="metric-header">
-                            <span class="metric-title">Total Processed</span>
-                            <div class="metric-icon purple">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            </div>
-                        </div>
-                        <div class="metric-value text-purple" id="metric-total">0 / 0</div>
-                        <div class="metric-footer" id="metric-percent">0% Completed</div>
-                    </div>
-                </div>
-
-                <!-- Master Progress & Controls Card -->
-                <div class="progress-card glass">
-                    <div class="progress-info-row">
-                        <div class="progress-title-col">
-                            <h3>Download Progress</h3>
-                            <p id="progress-subtitle">Waiting for user trigger...</p>
-                        </div>
-                        <div class="control-btn-group">
-                            <button class="btn btn-secondary" id="btn-enrich-all">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                                ✨ Enrich Studio Metadata & HD Art
-                            </button>
-                            <button class="btn btn-danger" id="btn-stop-download" style="display: none;">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/></svg>
-                                Stop
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="progress-track">
-                        <div class="progress-fill" id="progress-bar" style="width: 0%;"></div>
-                    </div>
-                </div>
-
-                <!-- Live Track Stream Feed -->
-                <div class="stream-section">
-                    <div class="section-header">
-                        <h2>Live Track Stream</h2>
-                        <span class="live-pulse"></span>
-                    </div>
-
-                    <div class="stream-grid" id="stream-feed">
-                        <div class="empty-feed glass">
-                            <div class="vinyl-record rotating">
-                                <div class="vinyl-center"></div>
-                            </div>
-                            <p>No active downloads right now. Paste a link above and click <strong>Start Download</strong>!</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- TAB 2: LIBRARY -->
-            <section id="tab-library" class="tab-pane">
-                <div class="library-header glass">
-                    <div class="search-box">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="library-search" placeholder="Search by song name, artist, or album...">
-                    </div>
-                    <div class="library-actions">
-                        <button class="btn btn-secondary" id="btn-refresh-library">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                            Refresh
-                        </button>
-                    </div>
-                </div>
-
-                <div class="library-grid" id="library-song-grid">
-                    <!-- Song Cards Rendered Here Dynamically -->
-                </div>
-            </section>
-
-            <!-- TAB 3: SETTINGS -->
-            <section id="tab-settings" class="tab-pane">
-                <div class="settings-card glass">
-                    <h2>Engine Configuration</h2>
-                    
-                    <div class="setting-item">
-                        <div>
-                            <label>Concurrent Download Streams</label>
-                            <p>Number of songs downloaded simultaneously.</p>
-                        </div>
-                        <select id="setting-threads">
-                            <option value="2">2 Streams (Ultra-Gentle)</option>
-                            <option value="3" selected>3 Streams (Recommended)</option>
-                            <option value="4">4 Streams (High Speed)</option>
-                            <option value="6">6 Streams (Maximum Speed)</option>
-                        </select>
-                    </div>
-
-                    <div class="setting-item">
-                        <div>
-                            <label>Audio Bitrate Quality</label>
-                            <p>Target MP3 encoding quality via FFmpeg.</p>
-                        </div>
-                        <select id="setting-quality">
-                            <option value="320k" selected>320 kbps MP3 (Highest Quality)</option>
-                            <option value="256k">256 kbps MP3</option>
-                            <option value="192k">192 kbps MP3</option>
-                        </select>
-                    </div>
-
-                    <div class="setting-item">
-                        <div>
-                            <label>Playlist Sort Order</label>
-                            <p>Prioritize your latest additions first.</p>
-                        </div>
-                        <select id="setting-sort">
-                            <option value="latest" selected>Latest Added First (Newest Songs First)</option>
-                            <option value="oldest">Oldest First (Playlist Default Order)</option>
-                        </select>
-                    </div>
-
-                    <div class="setting-item">
-                        <div>
-                            <label>File Naming Convention</label>
-                            <p>How MP3 files are named on your hard drive.</p>
-                        </div>
-                        <select id="setting-naming">
-                            <option value="title" selected>Song Title Only (e.g. Good Luck, Babe!.mp3)</option>
-                            <option value="artist-title">Artist - Song Title (e.g. Chappell Roan - Good Luck, Babe!.mp3)</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Floating Glass Audio Player -->
-        <footer class="player-bar glass" id="player-bar">
-            <div class="player-track-info">
-                <img id="player-cover" src="/static/placeholder.svg" alt="Cover" class="player-cover">
-                <div class="player-meta">
-                    <div class="player-title truncate" id="player-title">Select a track to play</div>
-                    <div class="player-artist truncate" id="player-artist">SpotiDownloader Player</div>
-                </div>
+              </div>
+              <select id="setting-threads" class="custom-select">
+                <option value="2">2 Streams (Ultra-Gentle)</option>
+                <option value="3" selected>3 Streams (Recommended)</option>
+                <option value="4">4 Streams (Fast)</option>
+                <option value="6">6 Streams (Maximum)</option>
+              </select>
             </div>
 
-            <div class="player-controls">
-                <div class="player-buttons">
-                    <button class="player-btn" id="player-prev" title="Previous">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg>
-                    </button>
-                    <button class="player-btn play-main" id="player-play" title="Play / Pause">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" id="player-play-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    </button>
-                    <button class="player-btn" id="player-next" title="Next">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg>
-                    </button>
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">🔽</div>
+                <div>
+                  <h4>Download Order</h4>
+                  <p>Priority sequence for playlist tracks</p>
                 </div>
-                <div class="player-scrubber-row">
-                    <span id="player-current-time">0:00</span>
-                    <input type="range" id="player-scrubber" min="0" max="100" value="0" step="0.1">
-                    <span id="player-total-time">0:00</span>
-                </div>
+              </div>
+              <select id="setting-sort" class="custom-select">
+                <option value="latest" selected>Newest Added First</option>
+                <option value="oldest">Playlist Default Order</option>
+              </select>
             </div>
 
-            <div class="player-volume-col">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                <input type="range" id="player-volume" min="0" max="1" step="0.05" value="0.8">
+            <div class="settings-card glass">
+              <div class="settings-card-head">
+                <div class="settings-icon">🏷️</div>
+                <div>
+                  <h4>File Naming</h4>
+                  <p>Format on local hard disk</p>
+                </div>
+              </div>
+              <select id="setting-naming" class="custom-select">
+                <option value="title" selected>Song Title Only</option>
+                <option value="artist-title">Artist - Song Title</option>
+              </select>
             </div>
+          </div>
+        </section>
+      </main>
 
-            <audio id="audio-engine"></audio>
-        </footer>
+      <!-- Slide-in Track Inspector Drawer -->
+      <div class="drawer-overlay" id="drawer-overlay"></div>
+      <aside class="track-drawer glass" id="track-drawer">
+        <button class="drawer-close-btn" id="drawer-close-btn" title="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        <div class="drawer-content">
+          <div class="drawer-art-wrap">
+            <img id="drawer-cover" src="/static/placeholder.svg" alt="Album Art" />
+            <span class="drawer-bitrate-badge" id="drawer-bitrate">320 kbps</span>
+          </div>
+
+          <div class="drawer-meta-header">
+            <h2 id="drawer-title" class="drawer-title">Track Title</h2>
+            <p id="drawer-artist" class="drawer-artist">Artist Name</p>
+          </div>
+
+          <div class="drawer-pills">
+            <span class="pill-tag" id="drawer-genre">Genre</span>
+            <span class="pill-tag" id="drawer-year">Year</span>
+            <span class="pill-tag" id="drawer-size">0 MB</span>
+          </div>
+
+          <div class="drawer-detail-table">
+            <div class="detail-item">
+              <span class="detail-k">Album</span>
+              <span class="detail-v" id="drawer-album">Album Name</span>
+            </div>
+            <div class="detail-item" id="drawer-collab-row" style="display: none;">
+              <span class="detail-k">Featuring</span>
+              <span class="detail-v" id="drawer-collab">--</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-k">Duration</span>
+              <span class="detail-v" id="drawer-duration">0:00</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-k">File</span>
+              <span class="detail-v monospace truncate" id="drawer-filename">track.mp3</span>
+            </div>
+          </div>
+
+          <div class="drawer-actions">
+            <button class="btn-drawer-play" id="drawer-play-btn">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span>Play Now</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Persistent Floating Glass Audio Dock -->
+      <footer class="player-dock glass" id="player-bar">
+        <div class="dock-track-info">
+          <div class="dock-cover-wrap">
+            <img id="player-cover" src="/static/placeholder.svg" alt="Now Playing" class="dock-cover" />
+          </div>
+          <div class="dock-text">
+            <div class="dock-title truncate" id="player-title">Select a track to play</div>
+            <div class="dock-artist truncate" id="player-artist">SpotiStudio Engine</div>
+          </div>
+        </div>
+
+        <div class="dock-controls-center">
+          <div class="dock-buttons">
+            <button class="ctrl-btn" id="player-prev" title="Previous Track (←)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <polygon points="19 20 9 12 19 4 19 20" />
+                <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </button>
+            <button class="ctrl-btn-play" id="player-play" title="Play / Pause (Space)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" id="player-play-icon">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </button>
+            <button class="ctrl-btn" id="player-next" title="Next Track (→)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <polygon points="5 4 15 12 5 20 5 4" />
+                <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="dock-scrubber-row">
+            <span class="time-label" id="player-current-time">0:00</span>
+            <div class="range-wrap">
+              <input type="range" id="player-scrubber" min="0" max="100" value="0" step="0.1" />
+            </div>
+            <span class="time-label" id="player-total-time">0:00</span>
+          </div>
+        </div>
+
+        <div class="dock-volume-col">
+          <button class="volume-btn" id="player-mute-btn" title="Mute / Unmute">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" id="volume-icon">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+          <input type="range" id="player-volume" min="0" max="1" step="0.02" value="0.8" />
+        </div>
+
+        <audio id="audio-engine" preload="auto"></audio>
+      </footer>
     </div>
 
-    <!-- Notification Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <!-- Notification Toasts -->
+    <div id="toast-container" class="toast-stack"></div>
 
     <script src="/static/app.js"></script>
-</body>
+  </body>
 </html>

@@ -25,7 +25,7 @@ from threading import Lock
 from typing import List, Dict, Optional, Tuple
 
 import mutagen
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, APIC, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, APIC, TPE4, TCON, ID3NoHeaderError
 
 # Default configuration
 DEFAULT_PLAYLIST_URL = "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
@@ -298,8 +298,14 @@ class YouTubeExtractor:
                 
         return collection_title, tracks
 
-def embed_id3_tags(file_path: str, track_info: Dict):
-    """Embed comprehensive ID3v2.3 tags and high-resolution album art into MP3 file."""
+def embed_id3_tags(file_path: str, track_info: Dict, enriched_metadata: Dict = None):
+    """Embed comprehensive ID3v2.3 tags and high-resolution album art into MP3 file.
+    
+    Args:
+        file_path: Path to the MP3 file
+        track_info: Base track information
+        enriched_metadata: Optional enriched metadata from iTunes (album, year, genre, artwork_url, collaborators)
+    """
     try:
         try:
             audio = ID3(file_path)
@@ -308,8 +314,26 @@ def embed_id3_tags(file_path: str, track_info: Dict):
 
         title = track_info.get('title', '')
         artist = track_info.get('artist', '')
-        album = track_info.get('album', '')
+        
+        # Use enriched metadata if available, fall back to track_info
+        album = title
+        if enriched_metadata and enriched_metadata.get('album'):
+            album = enriched_metadata['album']
+        elif track_info.get('album'):
+            album = track_info.get('album')
+        
         year = str(track_info.get('release_year', ''))
+        if enriched_metadata and enriched_metadata.get('year'):
+            year = str(enriched_metadata['year'])
+        
+        genre = ""
+        if enriched_metadata and enriched_metadata.get('genre'):
+            genre = enriched_metadata['genre']
+        
+        collaborators = []
+        if enriched_metadata and enriched_metadata.get('collaborators'):
+            collaborators = enriched_metadata['collaborators']
+        
         track_num = str(track_info.get('track_number', '1'))
 
         if title:
@@ -320,10 +344,20 @@ def embed_id3_tags(file_path: str, track_info: Dict):
             audio.add(TALB(encoding=3, text=album))
         if year and year.isdigit():
             audio.add(TDRC(encoding=3, text=year))
+        if genre:
+            audio.add(TCON(encoding=3, text=genre))
+        if collaborators:
+            # TPE4 = involved people list, TPE3 = conductor, TPE2 = band/orchestra
+            # Using TPE4 for featured artists/collaborators
+            audio.add(TPE4(encoding=3, text=collaborators))
         if track_num and track_num.isdigit():
             audio.add(TRCK(encoding=3, text=track_num))
 
-        cover_url = track_info.get('cover_url')
+        # Prefer enriched artwork, fall back to track_info
+        cover_url = enriched_metadata.get('artwork_url') if enriched_metadata else None
+        if not cover_url:
+            cover_url = track_info.get('cover_url')
+        
         if cover_url and cover_url.startswith('http'):
             try:
                 req = urllib.request.Request(cover_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -372,7 +406,8 @@ def download_single_track(
     ffmpeg_bin: str,
     bitrate: str = "320k",
     naming_format: str = "title",
-    cookies_browser: Optional[str] = None
+    cookies_browser: Optional[str] = None,
+    enriched_metadata: Dict = None
 ) -> Tuple[bool, str, str]:
     """Download a single track using yt-dlp, convert to MP3, and tag with ID3 metadata."""
     import yt_dlp
@@ -424,14 +459,14 @@ def download_single_track(
 
             temp_mp3 = f"{temp_prefix}.mp3"
             if os.path.isfile(temp_mp3):
-                embed_id3_tags(temp_mp3, track_info)
+                embed_id3_tags(temp_mp3, track_info, enriched_metadata)
                 shutil.move(temp_mp3, target_filepath)
                 return True, "downloaded", target_filename
             else:
                 matched = [f for f in os.listdir(output_folder) if f.startswith(f".temp_{track_info.get('id', '')}")]
                 if matched:
                     cand = os.path.join(output_folder, matched[0])
-                    embed_id3_tags(cand, track_info)
+                    embed_id3_tags(cand, track_info, enriched_metadata)
                     shutil.move(cand, target_filepath)
                     return True, "downloaded", target_filename
                 

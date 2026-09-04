@@ -5,6 +5,7 @@ Songs/*.webm
 Songs/*.opus
 Songs/*.wav
 .temp_*
+enrichment_report*.json
 
 # Python
 __pycache__/

@@ -39,7 +39,7 @@ from download_playlist import (
     DEFAULT_PLAYLIST_URL,
     DEFAULT_OUTPUT_FOLDER,
 )
-from fix_metadata import process_file as enrich_single_file
+from fix_metadata import process_file as enrich_single_file, fetch_itunes_metadata
 
 app = FastAPI(title="SpotiDownloader Studio")
 
@@ -75,6 +75,9 @@ class AppState:
         self.recent_completed: List[Dict] = []
         self.start_time = 0.0
         self.status_message = "Ready"
+        
+        # Enrichment cache: {(artist, title): enriched_metadata}
+        self.enriched_metadata_cache: Dict[tuple, Dict] = {}
         
         # Event listeners for SSE
         self.listeners: List[asyncio.Queue] = []
@@ -112,8 +115,74 @@ class DownloadRequest(BaseModel):
     naming: str = "title"
 
 class EnrichRequest(BaseModel):
-    threads: int = 8
+    threads: int = 4
     upgrade_artwork: bool = True
+    force: bool = False
+
+def enrich_tracks_for_download(tracks: List[Dict], threads: int = 4) -> Dict[tuple, Dict]:
+    """Enrich track metadata before downloading. Returns cache of enriched data."""
+    enriched_cache = {}
+    total = len(tracks)
+    
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = {}
+        for idx, track in enumerate(tracks):
+            artist = track.get('artist', 'Unknown Artist')
+            title = track.get('title', 'Unknown Title')
+            cache_key = (artist, title)
+            
+            # Skip if already cached
+            if cache_key in state.enriched_metadata_cache:
+                enriched_cache[cache_key] = state.enriched_metadata_cache[cache_key]
+                state.notify("enrich_progress", {
+                    "current": len(enriched_cache),
+                    "total": total,
+                    "percent": int((len(enriched_cache) / total) * 100),
+                    "status": "cached",
+                    "title": title
+                })
+                continue
+            
+            # Submit enrichment task
+            future = executor.submit(fetch_itunes_metadata, artist, title)
+            futures[future] = (cache_key, title, idx)
+        
+        # Collect results
+        for idx, future in enumerate(as_completed(futures), 1):
+            cache_key, title, track_idx = futures[future]
+            try:
+                enriched_data = future.result()
+                if enriched_data and enriched_data.get('match_score', 0) >= 0.45:
+                    enriched_cache[cache_key] = enriched_data
+                    state.enriched_metadata_cache[cache_key] = enriched_data
+                    
+                    state.notify("enrich_progress", {
+                        "current": len(enriched_cache) + (total - len(futures)),
+                        "total": total,
+                        "percent": int((len(enriched_cache) / total) * 100),
+                        "status": "enriched",
+                        "title": title,
+                        "album": enriched_data.get('album', 'N/A')
+                    })
+                else:
+                    state.notify("enrich_progress", {
+                        "current": len(enriched_cache) + idx,
+                        "total": total,
+                        "percent": int(((len(enriched_cache) + idx) / total) * 100),
+                        "status": "no_match",
+                        "title": title
+                    })
+            except Exception as e:
+                state.notify("enrich_progress", {
+                    "current": len(enriched_cache) + idx,
+                    "total": total,
+                    "percent": int(((len(enriched_cache) + idx) / total) * 100),
+                    "status": "error",
+                    "title": title
+                })
+    
+    return enriched_cache
+
 
 def run_download_worker(req: DownloadRequest):
     ffmpeg_bin = find_ffmpeg()
@@ -147,6 +216,22 @@ def run_download_worker(req: DownloadRequest):
             "total": len(tracks)
         })
 
+        # Phase 1: Enrich metadata from iTunes before downloading
+        with state.lock:
+            state.status_message = "Enriching metadata with Apple Music..."
+        state.notify("enrich_start", {"message": "Enriching metadata from iTunes...", "total": len(tracks)})
+        
+        enriched_cache = enrich_tracks_for_download(tracks, threads=min(4, req.threads))
+        
+        with state.lock:
+            state.status_message = f"Downloading \"{collection_title}\" with enriched metadata"
+        state.notify("enrich_complete", {
+            "enriched": len(enriched_cache),
+            "total": len(tracks),
+            "message": f"Enriched {len(enriched_cache)} tracks. Starting downloads..."
+        })
+
+        # Phase 2: Download tracks with enriched metadata
         with ThreadPoolExecutor(max_workers=req.threads) as executor:
             future_to_track = {
                 executor.submit(
@@ -155,7 +240,9 @@ def run_download_worker(req: DownloadRequest):
                     SONGS_DIR,
                     ffmpeg_bin,
                     req.quality,
-                    req.naming
+                    req.naming,
+                    None,  # cookies_browser
+                    enriched_cache.get((track.get('artist', 'Unknown Artist'), track.get('title', 'Unknown Title')))
                 ): track
                 for track in tracks
             }
@@ -233,21 +320,22 @@ def run_enrich_worker(req: EnrichRequest):
         total = len(mp3_files)
         success_count = 0
 
-        with ThreadPoolExecutor(max_workers=req.threads) as executor:
+        with ThreadPoolExecutor(max_workers=min(4, req.threads)) as executor:
             future_to_file = {
-                executor.submit(enrich_single_file, f, req.upgrade_artwork): f
+                executor.submit(enrich_single_file, f, req.upgrade_artwork, req.force): f
                 for f in mp3_files
             }
 
             for idx, future in enumerate(as_completed(future_to_file), 1):
-                success, filename, details = future.result()
-                if success:
+                status, filename, details = future.result()
+                if status == 'updated':
                     success_count += 1
                 state.notify("enrich_progress", {
                     "current": idx,
                     "total": total,
                     "percent": int((idx / max(1, total)) * 100),
                     "filename": filename,
+                    "status": status,
                     "details": details
                 })
 
@@ -322,11 +410,17 @@ def list_songs(search: Optional[str] = None):
             album = "Unknown Album"
             year = ""
             genre = ""
+            collaborators = []
             duration = 0
+            bitrate = "320 kbps"
             
             try:
                 mp3 = MP3(filepath)
                 duration = int(mp3.info.length)
+                # Extract bitrate
+                if hasattr(mp3.info, 'bitrate'):
+                    bitrate = f"{mp3.info.bitrate // 1000} kbps"
+                    
                 raw = ID3(filepath)
                 if 'TIT2' in raw and raw['TIT2'].text:
                     title = raw['TIT2'].text[0]
@@ -338,12 +432,22 @@ def list_songs(search: Optional[str] = None):
                     year = str(raw['TDRC'].text[0])
                 if 'TCON' in raw and raw['TCON'].text:
                     genre = str(raw['TCON'].text[0])
+                # Extract featuring artists (TPE4 is "Involved people list" or look in title)
+                if 'TPE4' in raw and raw['TPE4'].text:
+                    collaborators = [str(c) for c in raw['TPE4'].text]
+                elif ' feat. ' in title or ' featuring ' in title:
+                    # Extract from title if present
+                    parts = title.split(' feat. ')[-1] if ' feat. ' in title else title.split(' featuring ')[-1]
+                    collaborators = [c.strip() for c in parts.split(',')] if parts else []
             except Exception:
                 pass
 
             if search:
                 query = search.lower()
-                if query not in title.lower() and query not in artist.lower() and query not in album.lower() and query not in f.lower():
+                search_match = (query in title.lower() or query in artist.lower() or 
+                               query in album.lower() or query in f.lower() or
+                               any(query in c.lower() for c in collaborators))
+                if not search_match:
                     continue
 
             songs.append({
@@ -353,8 +457,10 @@ def list_songs(search: Optional[str] = None):
                 "album": album,
                 "year": year,
                 "genre": genre,
+                "collaborators": collaborators,
                 "duration": duration,
                 "size_mb": size_mb,
+                "bitrate": bitrate,
                 "mtime": stat.st_mtime
             })
         except Exception:
@@ -428,6 +534,7 @@ def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n🚀 Starting SpotiDownloader Studio Web Server on http://localhost:5000")
+    PORT = int(os.environ.get("PORT", 5050))
+    print(f"\n🚀 Starting SpotiDownloader Studio Web Server on http://localhost:{PORT}")
     print("📁 Destination folder:", SONGS_DIR)
-    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=False, log_level="info")
+    uvicorn.run("app:app", host="127.0.0.1", port=PORT, reload=False, log_level="info")
