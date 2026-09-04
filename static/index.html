@@ -10,7 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/style.css?v=3.0.1" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="stylesheet" href="/static/style.css?v=3.1.0" />
   </head>
   <body>
     <!-- Subtle Ambient Backdrop Glows -->
@@ -257,23 +258,57 @@
         <!-- ==================== TAB 2: LIBRARY ==================== -->
         <section id="tab-library" class="tab-view">
           <div class="library-toolbar glass">
-            <div class="library-search-wrap">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                id="library-search"
-                placeholder="Search tracks, artists, albums, or genres..."
-                autocomplete="off"
-              />
-              <button class="clear-search-btn" id="btn-clear-search" style="display: none;">&times;</button>
+            <!-- Search & Filters Row -->
+            <div class="library-search-row">
+              <div class="library-search-wrap">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  id="library-search"
+                  placeholder="Search songs, artists, albums, genres..."
+                  autocomplete="off"
+                />
+                <button class="clear-search-btn" id="btn-clear-search" style="display: none;">&times;</button>
+              </div>
+
+              <!-- Grouping Selector Pills -->
+              <div class="group-pills">
+                <button class="group-pill active" data-group="tracks">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  <span>Tracks</span>
+                </button>
+                <button class="group-pill" data-group="artists">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Artists</span>
+                </button>
+                <button class="group-pill" data-group="albums">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
+                  <span>Albums</span>
+                </button>
+                <button class="group-pill" data-group="genres">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <span>Genres</span>
+                </button>
+              </div>
+
+              <!-- Sort Dropdown -->
+              <div class="sort-selector-wrap">
+                <span class="sort-label">Sort:</span>
+                <select id="library-sort-select" class="sort-dropdown">
+                  <option value="recent">Recently Added</option>
+                  <option value="title">Song Name (A-Z)</option>
+                  <option value="artist">Artist (A-Z)</option>
+                  <option value="duration">Duration</option>
+                </select>
+              </div>
             </div>
 
             <div class="library-controls">
               <span class="library-counter" id="library-count-label">0 tracks</span>
-              <div class="view-switch">
+              <div class="view-switch" id="view-switch-wrap">
                 <button class="view-toggle-btn active" id="view-grid-btn" title="Grid View">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -433,7 +468,7 @@
 
       <!-- Persistent Floating Glass Audio Dock -->
       <footer class="player-dock glass" id="player-bar">
-        <div class="dock-track-info">
+        <div class="dock-track-info" id="dock-track-info" title="Click to Expand Fullscreen Player">
           <div class="dock-cover-wrap">
             <img id="player-cover" src="/static/placeholder.svg" alt="Now Playing" class="dock-cover" />
           </div>
@@ -441,6 +476,14 @@
             <div class="dock-title truncate" id="player-title">Select a track to play</div>
             <div class="dock-artist truncate" id="player-artist">Music Studio Engine</div>
           </div>
+          <button class="dock-expand-btn" id="player-expand-btn" title="Expand Fullscreen Player (F)">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 3 21 3 21 9"/>
+              <polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/>
+              <line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          </button>
         </div>
 
         <div class="dock-controls-center">
@@ -550,9 +593,116 @@
       </div>
     </div>
 
+    <!-- ==================== FULLSCREEN "NOW PLAYING" OVERLAY ==================== -->
+    <div id="fullscreen-player" class="fs-player" style="display: none;">
+      <!-- Dynamic Ambient Glow Backdrop -->
+      <div class="fs-ambient-glow" id="fs-ambient-glow"></div>
+
+      <!-- Top Header -->
+      <div class="fs-header">
+        <button class="fs-minimize-btn" id="fs-minimize-btn" title="Minimize (Esc)">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+          <span>Minimize</span>
+        </button>
+
+        <div class="fs-header-title">
+          <span class="fs-badge">NOW PLAYING</span>
+          <div class="sound-wave-anim">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <button class="fs-icon-btn" id="fs-drawer-btn" title="Track Inspector">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="1"></circle>
+            <circle cx="12" cy="5" r="1"></circle>
+            <circle cx="12" cy="19" r="1"></circle>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Center Hero Stage -->
+      <div class="fs-stage">
+        <div class="fs-cover-container">
+          <img id="fs-cover" src="/static/placeholder.svg" alt="Album Cover" class="fs-cover-img" />
+        </div>
+
+        <div class="fs-metadata">
+          <h1 id="fs-title" class="fs-track-title truncate">Select a song to play</h1>
+          <h2 id="fs-artist" class="fs-track-artist truncate">Music Studio</h2>
+          <span id="fs-album" class="fs-track-album truncate">Local Master</span>
+        </div>
+
+        <!-- Scrubber & Time -->
+        <div class="fs-scrubber-row">
+          <span class="fs-time-label" id="fs-current-time">0:00</span>
+          <div class="fs-range-wrap">
+            <input type="range" id="fs-scrubber" min="0" max="100" value="0" step="0.1" />
+          </div>
+          <span class="fs-time-label" id="fs-total-time">0:00</span>
+        </div>
+
+        <!-- Primary Transport Controls -->
+        <div class="fs-controls">
+          <button class="fs-ctrl-btn" id="fs-shuffle" title="Shuffle Mode (S)">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 3 21 3 21 8" />
+              <line x1="4" y1="20" x2="21" y2="3" />
+              <polyline points="21 16 21 21 16 21" />
+              <line x1="15" y1="15" x2="21" y2="21" />
+              <line x1="4" y1="4" x2="9" y2="9" />
+            </svg>
+          </button>
+
+          <button class="fs-ctrl-btn" id="fs-prev" title="Previous Track (←)">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              <polygon points="19 20 9 12 19 4 19 20" />
+              <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+
+          <button class="fs-play-btn" id="fs-play" title="Play / Pause (Space)">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" id="fs-play-icon">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          </button>
+
+          <button class="fs-ctrl-btn" id="fs-next" title="Next Track (→)">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              <polygon points="5 4 15 12 5 20 5 4" />
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+
+          <button class="fs-ctrl-btn" id="fs-repeat" title="Repeat Mode (R)">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="17 1 21 5 17 9" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <polyline points="7 23 3 19 7 15" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+            <span class="fs-repeat-badge" id="fs-repeat-badge">1</span>
+          </button>
+        </div>
+
+        <!-- Volume Bar -->
+        <div class="fs-volume-row">
+          <button class="fs-vol-btn" id="fs-mute-btn" title="Mute / Unmute">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" id="fs-vol-icon">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+          <input type="range" id="fs-volume" min="0" max="1" step="0.02" value="0.8" />
+        </div>
+      </div>
+    </div>
+
     <!-- Notification Toasts -->
     <div id="toast-container" class="toast-stack"></div>
 
-    <script src="/static/app.js?v=3.2.0"></script>
+    <script src="/static/app.js?v=3.3.0"></script>
   </body>
 </html>

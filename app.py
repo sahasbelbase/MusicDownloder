@@ -820,6 +820,13 @@ async def events_stream():
 # Mount Static Assets & Frontend
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+@app.get("/favicon.ico")
+def serve_favicon():
+    fav_path = os.path.join(STATIC_DIR, "favicon.svg")
+    if os.path.isfile(fav_path):
+        return FileResponse(fav_path, media_type="image/svg+xml")
+    return HTMLResponse("", status_code=204)
+
 @app.get("/")
 def serve_index():
     index_path = os.path.join(STATIC_DIR, "index.html")

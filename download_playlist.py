@@ -185,11 +185,16 @@ class SpotifyExtractor:
                 data = json.loads(match.group(1))
                 entity = data.get('props', {}).get('pageProps', {}).get('state', {}).get('data', {}).get('entity', {})
                 collection_title = entity.get('title', 'Spotify Track')
+                dur_ms = entity.get('duration', 0)
+                dur_sec = dur_ms // 1000 if dur_ms > 0 else 0
+                prev_url = entity.get('audioPreview', {}).get('url', '')
                 tracks.append({
                     'title': entity.get('title', ''),
                     'artist': entity.get('subtitle', ''),
                     'album': entity.get('album', {}).get('name', entity.get('title', '')),
                     'cover_url': entity.get('visualIdentity', {}).get('image', [{}])[-1].get('url', ''),
+                    'duration': dur_sec,
+                    'preview_url': prev_url,
                     'track_number': 1,
                     'query': f"{entity.get('subtitle', '')} - {entity.get('title', '')} Official Audio",
                     'spotify_url': url
@@ -216,11 +221,16 @@ class SpotifyExtractor:
                 for idx, t in enumerate(track_list, 1):
                     t_title = t.get('title', '')
                     t_artist = t.get('subtitle', '')
+                    dur_ms = t.get('duration', 0)
+                    dur_sec = dur_ms // 1000 if dur_ms > 0 else 0
+                    prev_url = t.get('audioPreview', {}).get('url', '')
                     tracks.append({
                         'title': t_title,
                         'artist': t_artist,
                         'album': collection_title,
                         'cover_url': cover_url,
+                        'duration': dur_sec,
+                        'preview_url': prev_url,
                         'track_number': idx,
                         'query': f"{t_artist} - {t_title} Official Audio",
                         'spotify_url': f"https://open.spotify.com/track/{t.get('id', '')}"
