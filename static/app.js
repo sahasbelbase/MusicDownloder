@@ -340,16 +340,28 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    // Ensure touch targets work instantly on Android WebView
+    btn.style.touchAction = 'manipulation';
+    btn.style.webkitTapHighlightColor = 'transparent';
+    btn.style.userSelect = 'none';
+
+    const handleNavTap = (e) => {
+      e.preventDefault();
       const target = btn.getAttribute('data-tab');
       if (isDeviceOffline && (target === 'discover' || target === 'downloader')) {
-        e.preventDefault();
-        showToast('⚡ Device is offline: Discover & Downloader require internet. Showing your Library.', 'warning');
+        showToast('\u26a1 Device is offline: Discover & Downloader require internet. Showing your Library.', 'warning');
         activateTab('library');
         return;
       }
       if (target) activateTab(target);
-    });
+    };
+
+    btn.addEventListener('click', handleNavTap);
+    // touchend fallback: fires before click on Android, removes 300ms delay
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      handleNavTap(e);
+    }, { passive: false });
   });
 
   // ==================== URL INPUT AUTO-DETECTION ====================

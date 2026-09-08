@@ -4989,155 +4989,143 @@ body.platform-android #mac-notch-hud {
 
 
 /* ==========================================================================
-   ANDROID & MOBILE DEDICATED BOTTOM NAVIGATION & COMPACT SONG ARTWORK
+   ANDROID-SPECIFIC PLATFORM OVERRIDES
+   On Android (body.platform-android) ensure bottom nav and compact sizing
    ========================================================================== */
 
-/* 1. Android & Screens <= 900px: Force Bottom Navigation Dock */
-body.platform-android .mobile-bottom-nav,
-@media (max-width: 900px) {
-  .mobile-bottom-nav {
-    display: flex !important;
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    height: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-    background: rgba(11, 14, 20, 0.96) !important;
-    backdrop-filter: blur(28px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-    z-index: 1000 !important;
-    justify-content: space-around !important;
-    align-items: center !important;
-    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.55) !important;
-  }
-
-  .mobile-nav-item {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 3px !important;
-    height: 100% !important;
-    background: transparent !important;
-    border: none !important;
-    color: var(--text-tertiary, #64748b) !important;
-    font-size: 0.70rem !important;
-    font-weight: 600 !important;
-    cursor: pointer !important;
-    transition: color 0.15s ease !important;
-  }
-
-  .mobile-nav-item.active {
-    color: var(--accent-emerald, #10b981) !important;
-  }
-
-  .mobile-nav-item.active svg {
-    stroke: var(--accent-emerald, #10b981) !important;
-  }
-
-  /* Hide top navbar pills on mobile/Android so top header never overflows */
-  .app-navbar .nav-pills {
-    display: none !important;
-  }
-
-  /* Player Dock sits cleanly right above the bottom navigation bar */
-  .player-dock {
-    left: 10px !important;
-    right: 10px !important;
-    bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 8px) !important;
-    height: 56px !important;
-    padding: 0 12px !important;
-    border-radius: 16px !important;
-    background: rgba(18, 22, 32, 0.95) !important;
-    backdrop-filter: blur(28px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6) !important;
-    z-index: 950 !important;
-  }
-
-  /* Safe scrolling padding so content is never cut off */
-  .app-layout {
-    padding-bottom: calc(142px + env(safe-area-inset-bottom, 0px)) !important;
-  }
+/* Android: Always show bottom nav with high specificity */
+body.platform-android .mobile-bottom-nav {
+  display: flex !important;
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: 62px !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  background: rgba(11, 14, 20, 0.97) !important;
+  backdrop-filter: blur(28px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.10) !important;
+  z-index: 1050 !important;
+  justify-content: space-around !important;
+  align-items: center !important;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.65) !important;
 }
 
-/* 2. Smaller, Sleek Song Images & Compact Cards on Mobile & Android */
-body.platform-android .library-container.grid-mode,
-@media (max-width: 900px) {
+/* Android: Hide desktop top nav pills */
+body.platform-android .app-navbar .nav-pills {
+  display: none !important;
+}
+
+/* Android: Player dock above bottom nav */
+body.platform-android .player-dock {
+  left: 10px !important;
+  right: 10px !important;
+  bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 10px) !important;
+  height: 58px !important;
+  padding: 0 12px !important;
+  border-radius: 16px !important;
+  background: rgba(18, 22, 32, 0.96) !important;
+  backdrop-filter: blur(28px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65) !important;
+  z-index: 990 !important;
+}
+
+/* Android: Bottom padding so content scrolls above both docks */
+body.platform-android .app-layout {
+  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Android: Compact song cards */
+body.platform-android .library-container.grid-mode {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+body.platform-android .song-card {
+  padding: 8px !important;
+  border-radius: 12px !important;
+}
+
+body.platform-android .song-card-title {
+  font-size: 0.80rem !important;
+}
+
+body.platform-android .song-card-artist {
+  font-size: 0.70rem !important;
+}
+
+body.platform-android .song-row {
+  padding: 6px 10px !important;
+  gap: 10px !important;
+}
+
+body.platform-android .song-row-thumb {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 6px !important;
+}
+
+body.platform-android .explore-song-thumb-wrap {
+  width: 38px !important;
+  height: 38px !important;
+}
+
+body.platform-android .dock-cover-wrap,
+body.platform-android .dock-cover {
+  width: 42px !important;
+  height: 42px !important;
+}
+
+/* Android: mobile-nav-item styling */
+body.platform-android .mobile-nav-item {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  height: 100% !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-tertiary, #64748b) !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+}
+
+body.platform-android .mobile-nav-item.active {
+  color: var(--emerald, #10b981) !important;
+}
+
+body.platform-android .mobile-nav-item.active svg {
+  stroke: var(--emerald, #10b981) !important;
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE: Extra compact at < 480px (small phones)
+   ========================================================================== */
+@media (max-width: 480px) {
   .library-container.grid-mode {
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
-    gap: 10px !important;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+    gap: 8px !important;
   }
 
   .song-card {
-    padding: 8px !important;
-    border-radius: 12px !important;
-  }
-
-  .song-card-art-wrap {
-    margin-bottom: 6px !important;
-    border-radius: 8px !important;
+    padding: 6px !important;
+    border-radius: 10px !important;
   }
 
   .song-card-title {
-    font-size: 0.80rem !important;
-    margin-bottom: 2px !important;
+    font-size: 0.78rem !important;
   }
 
   .song-card-artist {
-    font-size: 0.70rem !important;
-  }
-
-  /* List Mode Song Thumbnails */
-  .song-row {
-    padding: 6px 10px !important;
-    gap: 10px !important;
-  }
-
-  .song-row-thumb {
-    width: 34px !important;
-    height: 34px !important;
-    border-radius: 6px !important;
-  }
-
-  .song-row-title {
-    font-size: 0.82rem !important;
-  }
-
-  .song-row-artist {
-    font-size: 0.72rem !important;
-  }
-
-  /* Explore / Trending Thumbnails */
-  .explore-song-thumb-wrap {
-    width: 38px !important;
-    height: 38px !important;
-  }
-
-  .explore-song-card {
-    padding: 8px 10px !important;
-  }
-
-  .explore-song-title {
-    font-size: 0.82rem !important;
-  }
-
-  .explore-song-artist {
-    font-size: 0.72rem !important;
-  }
-
-  /* Dock Compact Cover */
-  .dock-cover-wrap {
-    width: 40px !important;
-    height: 40px !important;
-  }
-
-  .dock-cover {
-    width: 40px !important;
-    height: 40px !important;
+    font-size: 0.68rem !important;
   }
 }
