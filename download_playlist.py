@@ -658,6 +658,40 @@ def get_target_filename(track_info: Dict, naming_format: str = "title") -> str:
         return f"{track_num} - {artist} - {title}.mp3"
     return f"{title}.mp3"
 
+def is_file_matching_track(filepath: str, artist: str, title: str) -> bool:
+    """Check if an existing audio file actually belongs to the given artist & title."""
+    if not os.path.isfile(filepath):
+        return False
+    clean_art = (artist or '').strip().lower()
+    clean_tit = (title or '').strip().lower()
+    if not clean_art and not clean_tit:
+        return False
+    try:
+        from mutagen.id3 import ID3
+        tags = ID3(filepath)
+        file_artist = str(tags.get('TPE1', '')).strip().lower()
+        if file_artist and clean_art:
+            # If both have artist tags, verify they are compatible
+            if clean_art in file_artist or file_artist in clean_art:
+                return True
+            else:
+                return False
+    except Exception:
+        pass
+
+    basename = os.path.basename(filepath)
+    if basename.lower().endswith('.mp3'):
+        basename = basename[:-4]
+    if ' - ' in basename:
+        parts = basename.split(' - ', 1)
+        file_art = parts[0].strip().lower()
+        if clean_art and file_art:
+            if clean_art in file_art or file_art in clean_art:
+                return True
+            else:
+                return False
+    return True
+
 def download_single_track(
     track_info: Dict,
     output_folder: str,
@@ -670,21 +704,40 @@ def download_single_track(
     """Download a single track using yt-dlp, convert to MP3, and tag with ID3 metadata."""
     import yt_dlp
 
+    artist = sanitize_filename(track_info.get('artist', 'Unknown Artist'))
+    title = sanitize_filename(track_info.get('title', 'Unknown Title'))
+    alt_filename = f"{artist} - {title}.mp3"
+    alt_filepath = os.path.join(output_folder, alt_filename)
+
     target_filename = get_target_filename(track_info, naming_format)
     target_filepath = os.path.join(output_folder, target_filename)
     temp_prefix = os.path.join(output_folder, f".temp_{track_info.get('id', int(time.time()*1000))}")
 
-    # Also check if artist - title variant already exists to prevent duplicate downloads
-    artist = sanitize_filename(track_info.get('artist', 'Unknown Artist'))
-    title = sanitize_filename(track_info.get('title', 'Unknown Title'))
-    alt_filepath = os.path.join(output_folder, f"{artist} - {title}.mp3")
+    # 1. Check if alt_filepath ("Artist - Title.mp3") already exists and matches this artist
+    if os.path.isfile(alt_filepath) and os.path.getsize(alt_filepath) > 200 * 1024:
+        if is_file_matching_track(alt_filepath, artist, title):
+            return True, "skipped", alt_filename
 
-    if (os.path.isfile(target_filepath) and os.path.getsize(target_filepath) > 200 * 1024) or \
-       (os.path.isfile(alt_filepath) and os.path.getsize(alt_filepath) > 200 * 1024):
-        # If alt filepath exists, rename to user's desired naming format
-        if os.path.isfile(alt_filepath) and not os.path.isfile(target_filepath):
-            shutil.move(alt_filepath, target_filepath)
-        return True, "skipped", target_filename
+    # 2. Check if target_filepath exists:
+    if os.path.isfile(target_filepath) and os.path.getsize(target_filepath) > 200 * 1024:
+        if is_file_matching_track(target_filepath, artist, title):
+            return True, "skipped", target_filename
+        else:
+            # Collision! A song with the same title from a DIFFERENT artist already exists on disk!
+            # Disambiguate this song to "{Artist} - {Title}.mp3" so both songs coexist cleanly!
+            target_filename = alt_filename
+            target_filepath = alt_filepath
+
+            # Check if this disambiguated file already exists and matches
+            if os.path.isfile(target_filepath) and os.path.getsize(target_filepath) > 200 * 1024:
+                if is_file_matching_track(target_filepath, artist, title):
+                    return True, "skipped", target_filename
+                else:
+                    counter = 2
+                    while os.path.isfile(target_filepath) and os.path.getsize(target_filepath) > 200 * 1024:
+                        target_filename = f"{artist} - {title} ({counter}).mp3"
+                        target_filepath = os.path.join(output_folder, target_filename)
+                        counter += 1
 
     query = track_info.get('query') or f"{artist} - {title} Official Audio"
     if not query.startswith("http"):

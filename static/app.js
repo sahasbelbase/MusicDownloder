@@ -1497,21 +1497,27 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const song of rawLibrarySongs) {
       const sTitle = normalizeSongString(song.title);
       const sArtist = normalizeSongString(song.artist);
-      if (sTitle === tTitle && (!tArtist || !sArtist || sArtist.includes(tArtist) || tArtist.includes(sArtist))) {
-        return song;
+      if (sTitle === tTitle) {
+        if (tArtist && sArtist && sArtist !== 'unknown artist' && tArtist !== 'unknown artist') {
+          if (sArtist.includes(tArtist) || tArtist.includes(sArtist)) {
+            return song;
+          }
+        } else if (!tArtist || !sArtist || sArtist === 'unknown artist' || tArtist === 'unknown artist') {
+          const sFile = normalizeSongString(song.filename);
+          if (sFile === tTitle || (tArtist && sFile.includes(tArtist))) {
+            return song;
+          }
+        }
       }
     }
 
-    // 2. Loose match: title contains or filename contains (only if artist also matches)
+    // 2. Loose match (only if artist definitely matches)
     for (const song of rawLibrarySongs) {
       const sTitle = normalizeSongString(song.title);
       const sArtist = normalizeSongString(song.artist);
-      const sFile = normalizeSongString(song.filename);
-      const artistMatches = !tArtist || !sArtist || sArtist.includes(tArtist) || tArtist.includes(sArtist);
+      if (!tArtist || !sArtist || sArtist === 'unknown artist' || tArtist === 'unknown artist') continue;
+      const artistMatches = sArtist.includes(tArtist) || tArtist.includes(sArtist);
       if (artistMatches && sTitle && tTitle && (sTitle.includes(tTitle) || tTitle.includes(sTitle))) {
-        return song;
-      }
-      if (artistMatches && sFile && tTitle && sFile.includes(tTitle)) {
         return song;
       }
     }
@@ -1644,10 +1650,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = card.querySelector('.btn-quick-download');
     downloadBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (downloadBtn.classList.contains('downloaded')) {
-        showToast(`"${track.title}" is already in your library`, 'info');
-        return;
-      }
       downloadSingleTrack(track, downloadBtn);
     });
 

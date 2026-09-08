@@ -267,31 +267,43 @@ def main():
                 text_select=True
             )
 
-            # Background mode like Spotify: closing the window hides it so audio continues playing
-            if sys.platform == "darwin":
-                def on_closing():
-                    try:
-                        window.hide()
-                        return False
-                    except Exception:
-                        return True
-                window.events.closing += on_closing
-
+            def on_closed():
+                print("Window closed. Stopping Music Studio server and exiting...")
                 try:
-                    from AppKit import NSApplication
-                    from Foundation import NSObject
-                    class AppReopenDelegate(NSObject):
-                        def applicationShouldHandleReopen_hasVisibleWindows_(self, app, flag):
-                            try:
-                                window.show()
-                                window.restore()
-                            except Exception:
-                                pass
-                            return True
-                    _dock_delegate = AppReopenDelegate.alloc().init()
-                    NSApplication.sharedApplication().setDelegate_(_dock_delegate)
+                    server_thread.stop()
                 except Exception:
                     pass
+                import os
+                os._exit(0)
+
+            window.events.closed += on_closed
+
+            if sys.platform == "darwin":
+                try:
+                    import webview.platforms.cocoa as cocoa
+
+                    # Support clicking dock icon to restore window without overwriting delegate
+                    def reopen_handler(self, app, flag):
+                        for instance in cocoa.BrowserView.instances.values():
+                            if instance and instance.window:
+                                instance.window.makeKeyAndOrderFront_(None)
+                                instance.window.setIsVisible_(True)
+                        return True
+                    cocoa.BrowserView.AppDelegate.applicationShouldHandleReopen_hasVisibleWindows_ = reopen_handler
+
+                    # Ensure Cmd+Q, App Menu -> Quit, and Dock -> Quit cleanly terminate process
+                    def terminate_handler(self, app):
+                        print("Terminating Music Studio via Cmd+Q / Menu Quit...")
+                        try:
+                            server_thread.stop()
+                        except Exception:
+                            pass
+                        import os
+                        os._exit(0)
+                        return 1
+                    cocoa.BrowserView.AppDelegate.applicationShouldTerminate_ = terminate_handler
+                except Exception as e:
+                    print(f"Cocoa delegate notice: {e}")
 
             webview.start(on_gui_ready, debug=False)
         except Exception as e:
