@@ -431,22 +431,38 @@ document.addEventListener('DOMContentLoaded', () => {
     return [];
   }
 
+  window.onAndroidPermissionsGranted = function() {
+    console.log('[Android] Audio permissions granted, refreshing device library...');
+    const songs = scanAndroidDeviceAudio();
+    if (songs && songs.length > 0) {
+      rawLibrarySongs = songs;
+      navSongCount.textContent = rawLibrarySongs.length;
+      if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
+      libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
+      applySortAndFilter();
+      showToast(`Loaded ${songs.length} tracks from your phone!`, 'success');
+    }
+  };
+  window.reloadAndroidLibrary = window.onAndroidPermissionsGranted;
+
+  window.onAndroidDownloadComplete = function() {
+    console.log('[Android] Download finished, rescanning device library...');
+    const songs = scanAndroidDeviceAudio();
+    if (songs && songs.length > 0) {
+      rawLibrarySongs = songs;
+      navSongCount.textContent = rawLibrarySongs.length;
+      if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
+      libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
+      applySortAndFilter();
+      showToast('Track saved to your device library!', 'success');
+    }
+  };
+
   function triggerLocalMusicPicker() {
     if (window.AndroidMusicScanner) {
       if (typeof window.AndroidMusicScanner.hasStoragePermission === 'function' && !window.AndroidMusicScanner.hasStoragePermission()) {
         window.AndroidMusicScanner.requestStoragePermission();
-        showToast('Please allow audio permission to load your music', 'info');
-        setTimeout(() => {
-          const songs = scanAndroidDeviceAudio();
-          if (songs && songs.length > 0) {
-            rawLibrarySongs = songs;
-            navSongCount.textContent = rawLibrarySongs.length;
-            if (mobileNavSongCount) mobileNavSongCount.textContent = rawLibrarySongs.length;
-            libraryCountLabel.textContent = `${rawLibrarySongs.length} track${rawLibrarySongs.length === 1 ? '' : 's'}`;
-            applySortAndFilter();
-            showToast(`Loaded ${songs.length} tracks from your phone!`, 'success');
-          }
-        }, 1200);
+        showToast('Please grant storage/audio permission in the dialog', 'info');
         return;
       }
       const songs = scanAndroidDeviceAudio();
@@ -461,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (isMobilePlatform && localMusicFilesInput) {
+    if (localMusicFilesInput) {
       localMusicFilesInput.click();
     } else if (localMusicFolderInput) {
       try {
@@ -469,8 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {
         if (localMusicFilesInput) localMusicFilesInput.click();
       }
-    } else if (localMusicFilesInput) {
-      localMusicFilesInput.click();
     }
   }
 
@@ -714,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (data.action === 'prev') {
             playPrevTrack();
           } else if (data.action === 'seek' && typeof data.time === 'number') {
-            audioEngine.currentTime = data.time;
+            seekAudioTo(data.time);
           } else if (data.action === 'stream_track' || data.action === 'play_stream') {
             let trackData = null;
             if (data.filename && data.filename.startsWith('{')) {
@@ -1140,9 +1154,31 @@ document.addEventListener('DOMContentLoaded', () => {
       libraryContainer.classList.add('grid-mode');
       libraryContainer.classList.remove('list-mode');
 
+      function resolveSongGenre(song) {
+        if (song.genre && song.genre !== 'General' && song.genre !== 'Unknown' && song.genre.trim()) {
+          return song.genre.trim();
+        }
+        const combined = `${song.artist || ''} ${song.title || ''} ${song.album || ''}`.toLowerCase();
+        if (combined.includes('rock') || combined.includes('queen') || combined.includes('ac/dc') || combined.includes('metallica') || combined.includes('linkin park') || combined.includes('nirvana') || combined.includes('beatles')) return 'Rock';
+        if (combined.includes('hip hop') || combined.includes('rap') || combined.includes('drake') || combined.includes('eminem') || combined.includes('kendrick') || combined.includes('travis') || combined.includes('kanye') || combined.includes('future') || combined.includes('tupac')) return 'Hip-Hop';
+        if (combined.includes('edm') || combined.includes('dance') || combined.includes('house') || combined.includes('dj') || combined.includes('avicii') || combined.includes('garrix') || combined.includes('tiesto') || combined.includes('marshmello') || combined.includes('guetta')) return 'Electronic';
+        if (combined.includes('pop') || combined.includes('swift') || combined.includes('sheeran') || combined.includes('grande') || combined.includes('dua lipa') || combined.includes('bieber') || combined.includes('weeknd') || combined.includes('billie') || combined.includes('bruno') || combined.includes('olivia')) return 'Pop';
+        if (combined.includes('r&b') || combined.includes('sza') || combined.includes('beyonce') || combined.includes('rihanna') || combined.includes('frank ocean') || combined.includes('chris brown') || combined.includes('usher')) return 'R&B';
+        if (combined.includes('classical') || combined.includes('orchestra') || combined.includes('mozart') || combined.includes('beethoven') || combined.includes('bach') || combined.includes('chopin') || combined.includes('piano')) return 'Classical';
+        if (combined.includes('jazz') || combined.includes('miles davis') || combined.includes('coltrane') || combined.includes('sinatra') || combined.includes('armstrong') || combined.includes('fitzgerald')) return 'Jazz';
+        if (combined.includes('country') || combined.includes('luke combs') || combined.includes('morgan wallen') || combined.includes('dolly') || combined.includes('cash') || combined.includes('zach bryan')) return 'Country';
+        if (combined.includes('latin') || combined.includes('bad bunny') || combined.includes('reggaeton') || combined.includes('j balvin') || combined.includes('rosalia') || combined.includes('maluma')) return 'Latin';
+        if (combined.includes('k-pop') || combined.includes('bts') || combined.includes('blackpink') || combined.includes('twice') || combined.includes('stray kids') || combined.includes('newjeans')) return 'K-Pop';
+        if (combined.includes('hindi') || combined.includes('bollywood') || combined.includes('arijit') || combined.includes('shreya') || combined.includes('atif') || combined.includes('nepali') || combined.includes('punjabi') || combined.includes('sidhu')) return 'Desi & Hindi';
+        if (combined.includes('lofi') || combined.includes('chill') || combined.includes('ambient') || combined.includes('relax')) return 'Chillout & Lofi';
+        if (combined.includes('indie') || combined.includes('arctic monkeys') || combined.includes('tame impala') || combined.includes('strokes') || combined.includes('phoenix')) return 'Indie & Alternative';
+        if (combined.includes('soundtrack') || combined.includes('score') || combined.includes('zimmer') || combined.includes('williams') || combined.includes('morricone') || combined.includes('ost')) return 'Soundtrack';
+        return 'Studio Hits';
+      }
+
       const genreMap = {};
       librarySongs.forEach(song => {
-        const g = (song.genre || 'General').trim() || 'General';
+        const g = resolveSongGenre(song);
         if (!genreMap[g]) genreMap[g] = [];
         genreMap[g].push(song);
       });
@@ -1171,10 +1207,14 @@ document.addEventListener('DOMContentLoaded', () => {
       genres.forEach(genre => {
         const songs = genreMap[genre];
         const meta = getGenreBadgeMeta(genre);
+        const repCover = songs[0].cover_url || (songs[0].filename ? resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(songs[0].filename)}`) : 'placeholder.svg');
         const card = document.createElement('div');
         card.className = 'group-card genre-card';
         card.innerHTML = `
-          <div class="genre-badge-icon" style="background: ${meta.bg}; box-shadow: 0 8px 20px -4px ${meta.border}66; font-size: 1.85rem; display: flex; align-items: center; justify-content: center;">${meta.icon}</div>
+          <div class="genre-card-art-container" style="position: relative; width: 100%; aspect-ratio: 1/1; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 12px; background: ${meta.bg};">
+            <img src="${repCover}" onerror="this.style.opacity='0'" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.78; filter: brightness(0.9); transition: transform 0.3s ease;" class="genre-bg-img" />
+            <div class="genre-badge-icon" style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); border: 1px solid ${meta.border}; border-radius: 10px; width: 44px; height: 44px; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">${meta.icon}</div>
+          </div>
           <div class="group-title truncate" title="${escapeHtml(genre)}">${escapeHtml(genre)}</div>
           <div class="group-sub">${songs.length} track${songs.length === 1 ? '' : 's'}</div>
         `;
@@ -2042,7 +2082,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const coverUrl = track.cover_url || 'placeholder.svg';
     const totalSec = (track.duration && track.duration > 0) ? track.duration : 0;
 
-    audioEngine.src = streamEndpoint;
+    // Instant-Play Streaming Engine: If a high-bitrate preview stream is available, start playback immediately (<150ms)!
+    if (track.preview_url && track.preview_url.startsWith('http')) {
+      audioEngine.dataset.streamMode = 'preview';
+      audioEngine.dataset.streamFullEndpoint = streamEndpoint;
+      audioEngine.dataset.streamQuery = query;
+      audioEngine.src = track.preview_url;
+      // Concurrently prefetch and cache the full studio master stream in background
+      fetch(resolveApiUrl(`/api/stream/prefetch?q=${encodeURIComponent(query)}`)).catch(() => {});
+    } else {
+      audioEngine.dataset.streamMode = 'full';
+      delete audioEngine.dataset.streamFullEndpoint;
+      delete audioEngine.dataset.streamQuery;
+      audioEngine.src = streamEndpoint;
+    }
+
     audioEngine.load();
     const playPromise = audioEngine.play();
     if (playPromise !== undefined) {
@@ -2112,6 +2166,39 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function downloadSingleTrack(track, btnEl) {
+    if (!track) return;
+
+    // Direct Android native download via DownloadManager & MediaScanner
+    if (window.AndroidMusicScanner && typeof window.AndroidMusicScanner.downloadTrackToDevice === 'function') {
+      const directAudioUrl = track.preview_url || (track.query ? resolveApiUrl(`/api/stream?q=${encodeURIComponent(track.query)}`) : '');
+      if (directAudioUrl) {
+        if (btnEl) {
+          btnEl.classList.add('downloading');
+          btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Saving...</span>`;
+        }
+        try {
+          const ok = window.AndroidMusicScanner.downloadTrackToDevice(
+            directAudioUrl,
+            track.title || 'Track',
+            track.artist || 'Artist',
+            track.album || 'Music Studio',
+            track.cover_url || ''
+          );
+          if (ok) {
+            showToast(`Saving "${track.title}" to device storage`, 'success');
+            if (btnEl) {
+              btnEl.classList.remove('downloading');
+              btnEl.classList.add('downloaded');
+              btnEl.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span>Saved</span>`;
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn('[AndroidBridge] downloadTrackToDevice error:', err);
+        }
+      }
+    }
+
     if (btnEl) {
       btnEl.classList.add('downloading');
       btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Saving...</span>`;
@@ -3674,11 +3761,25 @@ document.addEventListener('DOMContentLoaded', () => {
       updateNotchProgress(pct, audioEngine.currentTime);
       updateMediaSessionPosition();
 
-      // Intelligent zero-gap next-song prefetching
-      if (isOnlineStreaming && currentOnlineQueue && currentOnlineQueue.length && audioEngine.duration > 25) {
-        if (!hasPrefetchedNextTrack && (audioEngine.currentTime / audioEngine.duration) >= 0.65) {
-          hasPrefetchedNextTrack = true;
-          let nextTrack = null;
+      // Preview stream to full master stream handover
+      if (isOnlineStreaming && audioEngine.dataset.streamMode === 'preview' && audioEngine.dataset.streamFullEndpoint) {
+        if (audioEngine.currentTime >= 27.5) {
+          const fullUrl = audioEngine.dataset.streamFullEndpoint;
+          const curPos = audioEngine.currentTime;
+          audioEngine.dataset.streamMode = 'full';
+          audioEngine.src = fullUrl;
+          audioEngine.currentTime = curPos;
+          audioEngine.play().catch(() => {});
+        }
+      }
+
+      // Intelligent zero-gap next-song prefetching (Prioritizing User Queue)
+      if (audioEngine.duration > 15 && !hasPrefetchedNextTrack && (audioEngine.currentTime / audioEngine.duration) >= 0.65) {
+        hasPrefetchedNextTrack = true;
+        let nextTrack = null;
+        if (userPlayQueue && userPlayQueue.length > 0) {
+          nextTrack = userPlayQueue[0];
+        } else if (isOnlineStreaming && currentOnlineQueue && currentOnlineQueue.length) {
           if (isShuffle) {
             const pool = currentOnlineQueue.filter((_, i) => i !== currentOnlineQueueIndex);
             if (pool.length) nextTrack = pool[Math.floor(Math.random() * pool.length)];
@@ -3687,10 +3788,10 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (repeatMode === 'all') {
             nextTrack = currentOnlineQueue[0];
           }
-          if (nextTrack) {
-            const nextQuery = nextTrack.query || `${nextTrack.title} ${nextTrack.artist}`;
-            fetch(resolveApiUrl(`/api/stream/prefetch?q=${encodeURIComponent(nextQuery)}`)).catch(() => {});
-          }
+        }
+        if (nextTrack) {
+          const nextQuery = nextTrack.query || `${nextTrack.title} ${nextTrack.artist}`;
+          fetch(resolveApiUrl(`/api/stream/prefetch?q=${encodeURIComponent(nextQuery)}`)).catch(() => {});
         }
       }
 
@@ -3798,11 +3899,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function seekAudioTo(targetTime) {
+    if (!audioEngine) return;
+    if (isOnlineStreaming && audioEngine.dataset.streamMode === 'preview' && targetTime > 27.5 && audioEngine.dataset.streamFullEndpoint) {
+      const fullUrl = audioEngine.dataset.streamFullEndpoint;
+      audioEngine.dataset.streamMode = 'full';
+      audioEngine.src = fullUrl;
+      audioEngine.currentTime = targetTime;
+      audioEngine.play().catch(() => {});
+    } else {
+      const maxDur = (audioEngine.duration && isFinite(audioEngine.duration)) ? audioEngine.duration : 10000;
+      audioEngine.currentTime = Math.max(0, Math.min(targetTime, maxDur - 0.2));
+    }
+  }
+
   playerScrubber.addEventListener('change', (e) => {
     const pct = parseFloat(e.target.value);
     if (audioEngine.duration && isFinite(audioEngine.duration)) {
       const targetTime = (pct / 100) * audioEngine.duration;
-      audioEngine.currentTime = Math.max(0, Math.min(targetTime, audioEngine.duration - 0.2));
+      seekAudioTo(targetTime);
     }
     setTimeout(() => {
       isSeeking = false;
@@ -3831,7 +3946,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const pct = parseFloat(e.target.value);
       if (audioEngine.duration && isFinite(audioEngine.duration)) {
         const targetTime = (pct / 100) * audioEngine.duration;
-        audioEngine.currentTime = Math.max(0, Math.min(targetTime, audioEngine.duration - 0.2));
+        seekAudioTo(targetTime);
       }
       setTimeout(() => {
         isSeeking = false;

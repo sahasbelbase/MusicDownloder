@@ -1,13 +1,22 @@
 package com.musicstudio.app;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.ContentUris;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.app.DownloadManager;
+import android.media.MediaScannerConnection;
+import android.os.Environment;
+import java.io.File;
+
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
@@ -20,16 +29,93 @@ public class MainActivity extends BridgeActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 2026;
 
+    private final BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+            if (id != -1) {
+                DownloadManager downloadManager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                if (downloadManager == null) return;
+                DownloadManager.Query query = new DownloadManager.Query();
+                query.setFilterById(id);
+                try (Cursor cursor = downloadManager.query(query)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                        if (statusIndex != -1 && cursor.getInt(statusIndex) == DownloadManager.STATUS_SUCCESSFUL) {
+                            int uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                            if (uriIndex != -1) {
+                                String localUri = cursor.getString(uriIndex);
+                                if (localUri != null) {
+                                    String path = Uri.parse(localUri).getPath();
+                                    if (path != null) {
+                                        MediaScannerConnection.scanFile(
+                                            MainActivity.this,
+                                            new String[]{path},
+                                            new String[]{"audio/mpeg"},
+                                            (scannedPath, uri) -> {
+                                                runOnUiThread(() -> {
+                                                    WebView webView = getBridge().getWebView();
+                                                    if (webView != null) {
+                                                        webView.evaluateJavascript("if (typeof window.onAndroidDownloadComplete === 'function') { window.onAndroidDownloadComplete(); }", null);
+                                                    }
+                                                });
+                                            }
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    };
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         WebView webView = getBridge().getWebView();
         if (webView != null) {
+            webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
             webView.addJavascriptInterface(new AndroidMusicBridge(), "AndroidMusicScanner");
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        }
+
         requestAudioPermissions();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (hasPermission()) {
+            notifyWebViewPermissionsGranted();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // Keep WebView audio running when app is minimized / screen is locked
+        WebView webView = getBridge().getWebView();
+        if (webView != null) {
+            webView.onResume();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        try {
+            unregisterReceiver(onDownloadComplete);
+        } catch (Exception ignored) {}
+        super.onDestroy();
     }
 
     private boolean hasPermission() {
@@ -50,10 +136,76 @@ public class MainActivity extends BridgeActivity {
                     Manifest.permission.WRITE_EXTERNAL_STORAGE
                 }, PERMISSION_REQUEST_CODE);
             }
+        } else {
+            notifyWebViewPermissionsGranted();
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                notifyWebViewPermissionsGranted();
+            }
+        }
+    }
+
+    private void notifyWebViewPermissionsGranted() {
+        runOnUiThread(() -> {
+            WebView webView = getBridge().getWebView();
+            if (webView != null) {
+                webView.evaluateJavascript("if (typeof window.onAndroidPermissionsGranted === 'function') { window.onAndroidPermissionsGranted(); }", null);
+            }
+        });
+    }
+
     public class AndroidMusicBridge {
+
+        @JavascriptInterface
+        public boolean downloadTrackToDevice(String audioUrl, String title, String artist, String album, String coverUrl) {
+            if (audioUrl == null || audioUrl.isEmpty()) return false;
+            try {
+                String cleanTitle = (title != null) ? title.replaceAll("[^a-zA-Z0-9._ -]", "").trim() : "Track";
+                String cleanArtist = (artist != null) ? artist.replaceAll("[^a-zA-Z0-9._ -]", "").trim() : "Unknown Artist";
+                if (cleanTitle.isEmpty()) cleanTitle = "Track";
+                if (cleanArtist.isEmpty()) cleanArtist = "Unknown Artist";
+                String filename = cleanArtist + " - " + cleanTitle + ".mp3";
+
+                DownloadManager downloadManager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                if (downloadManager == null) return false;
+
+                Uri uri = Uri.parse(audioUrl);
+                DownloadManager.Request request = new DownloadManager.Request(uri);
+                request.setTitle(cleanTitle);
+                request.setDescription("Music Studio • " + cleanArtist);
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+
+                File musicDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Music Studio");
+                if (!musicDir.exists()) {
+                    musicDir.mkdirs();
+                }
+
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "Music Studio/" + filename);
+                request.setMimeType("audio/mpeg");
+
+                downloadManager.enqueue(request);
+
+                File targetFile = new File(musicDir, filename);
+                MediaScannerConnection.scanFile(
+                    MainActivity.this,
+                    new String[]{targetFile.getAbsolutePath()},
+                    new String[]{"audio/mpeg"},
+                    null
+                );
+
+                return true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
         @JavascriptInterface
         public boolean hasStoragePermission() {
             return hasPermission();
@@ -96,7 +248,12 @@ public class MainActivity extends BridgeActivity {
                     MediaStore.Audio.Media.DATE_MODIFIED
                 };
 
-                String selection = MediaStore.Audio.Media.IS_MUSIC + " != 0";
+                String selection = "((" + MediaStore.Audio.Media.IS_MUSIC + " != 0) OR (" +
+                                  MediaStore.Audio.Media.DATA + " LIKE '%.mp3') OR (" +
+                                  MediaStore.Audio.Media.DATA + " LIKE '%.m4a') OR (" +
+                                  MediaStore.Audio.Media.DATA + " LIKE '%.flac') OR (" +
+                                  MediaStore.Audio.Media.DATA + " LIKE '%.wav')) AND (" +
+                                  MediaStore.Audio.Media.DURATION + " >= 5000)";
                 String sortOrder = MediaStore.Audio.Media.TITLE + " ASC";
 
                 try (Cursor cursor = getContentResolver().query(collection, projection, selection, null, sortOrder)) {
@@ -131,6 +288,7 @@ public class MainActivity extends BridgeActivity {
                             song.put("size_mb", Math.round((sizeBytes / (1024.0 * 1024.0)) * 100.0) / 100.0);
                             song.put("filename", dataPath);
                             song.put("file_path", dataPath);
+                            song.put("content_uri", ContentUris.withAppendedId(collection, id).toString());
                             song.put("is_local_device", true);
                             song.put("is_android_mediastore", true);
                             song.put("mtime", mtime);
