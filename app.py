@@ -1394,6 +1394,52 @@ def stream_audio(filename: str, request: Request):
     except Exception:
         return FileResponse(filepath, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
 
+@app.delete("/api/songs/{filename:path}")
+def delete_song_file(filename: str):
+    """Permanently delete a downloaded MP3 song from the library and disk."""
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=400, detail="Filename parameter is required")
+    
+    candidates = [
+        filename,
+        urllib.parse.unquote(filename),
+        f"{filename}.mp3" if not filename.endswith(".mp3") else filename,
+        f"{urllib.parse.unquote(filename)}.mp3" if not urllib.parse.unquote(filename).endswith(".mp3") else urllib.parse.unquote(filename),
+    ]
+
+    target_path = None
+    real_songs_dir = os.path.realpath(SONGS_DIR)
+    for c in candidates:
+        fp = os.path.realpath(os.path.join(SONGS_DIR, c))
+        if fp.startswith(real_songs_dir) and os.path.isfile(fp):
+            target_path = fp
+            break
+
+    if not target_path:
+        raise HTTPException(status_code=404, detail="Song file not found in library")
+
+    try:
+        os.remove(target_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file from disk: {str(e)}")
+
+    # Clean up from play stats if present
+    try:
+        stats = load_play_stats()
+        base = os.path.basename(target_path)
+        if base in stats:
+            del stats[base]
+            save_play_stats(stats)
+    except Exception:
+        pass
+
+    return {
+        "status": "deleted",
+        "success": True,
+        "filename": os.path.basename(target_path),
+        "message": f"Successfully deleted {os.path.basename(target_path)}"
+    }
+
 # ==================== ON-THE-FLY STREAMING & DISK CACHE ENGINE ====================
 STREAM_CACHE: Dict[str, dict] = {}
 STREAM_CACHE_LOCK = Lock()

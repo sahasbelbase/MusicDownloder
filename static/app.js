@@ -85,6 +85,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const drawerDuration = document.getElementById('drawer-duration');
   const drawerFilename = document.getElementById('drawer-filename');
   const drawerPlayBtn = document.getElementById('drawer-play-btn');
+  const drawerDeleteBtn = document.getElementById('drawer-delete-btn');
+
+  // Confirmation Modal Elements
+  const confirmModal = document.getElementById('confirm-modal');
+  const confirmModalBackdrop = document.getElementById('confirm-modal-backdrop');
+  const confirmModalClose = document.getElementById('confirm-modal-close');
+  const confirmModalTitle = document.getElementById('confirm-modal-title');
+  const confirmModalMessage = document.getElementById('confirm-modal-message');
+  const confirmModalDetails = document.getElementById('confirm-modal-details');
+  const confirmModalItemTitle = document.getElementById('confirm-modal-item-title');
+  const confirmModalItemSub = document.getElementById('confirm-modal-item-sub');
+  const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+  const confirmModalActionBtn = document.getElementById('confirm-modal-action-btn');
+  let currentConfirmCallback = null;
 
   // Audio Dock Elements
   const audioEngine = document.getElementById('audio-engine');
@@ -913,11 +927,27 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="song-row-album truncate">${escapeHtml(song.album || '—')}</div>
             <div class="song-row-duration">${durationFormatted}</div>
             <div class="song-row-actions">
+              <button class="row-delete-btn" title="Delete from Library">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
               <button class="row-play-btn" title="Play Track">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               </button>
             </div>
           `;
+
+          const rowDelBtn = row.querySelector('.row-delete-btn');
+          if (rowDelBtn) {
+            rowDelBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              promptDeleteSong(song);
+            });
+          }
 
           row.querySelector('.row-play-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1149,9 +1179,17 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (delBtn) {
         delBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (confirm(`Delete playlist "${playlist.title}"?`)) {
-            deleteUserPlaylist(playlist.id);
-          }
+          showConfirmDialog({
+            title: 'Delete Playlist?',
+            message: 'Are you sure you want to delete "' + (playlist.title || 'Playlist') + '"? Audio tracks will remain in your library.',
+            itemTitle: playlist.title,
+            itemSub: (playlist.tracks ? playlist.tracks.length : 0) + ' tracks',
+            confirmText: 'Delete Playlist',
+            isDanger: true,
+            onConfirm: () => {
+              deleteUserPlaylist(playlist.id);
+            }
+          });
         });
       }
 
@@ -1390,6 +1428,118 @@ document.addEventListener('DOMContentLoaded', () => {
     if (trackDrawer) trackDrawer.classList.remove('open');
     if (drawerOverlay) drawerOverlay.classList.remove('open');
   }
+
+  // ==================== CONFIRMATION DIALOG ====================
+  function showConfirmDialog(opts) {
+    var title = opts.title || 'Confirm Deletion';
+    var message = opts.message || 'Are you sure you want to proceed?';
+    var itemTitle = opts.itemTitle;
+    var itemSub = opts.itemSub;
+    var confirmText = opts.confirmText || 'Delete';
+    var isDanger = opts.isDanger !== false;
+    var onConfirm = opts.onConfirm;
+
+    if (!confirmModal) {
+      if (window.confirm(title + '\n\n' + message)) {
+        if (onConfirm) onConfirm();
+      }
+      return;
+    }
+
+    if (confirmModalTitle) confirmModalTitle.textContent = title;
+    if (confirmModalMessage) confirmModalMessage.textContent = message;
+    if (confirmModalDetails) {
+      if (itemTitle) {
+        confirmModalDetails.style.display = 'block';
+        if (confirmModalItemTitle) confirmModalItemTitle.textContent = itemTitle;
+        if (confirmModalItemSub) confirmModalItemSub.textContent = itemSub || '';
+      } else {
+        confirmModalDetails.style.display = 'none';
+      }
+    }
+    if (confirmModalActionBtn) {
+      confirmModalActionBtn.textContent = confirmText;
+      confirmModalActionBtn.className = isDanger ? 'btn-danger-confirm' : 'btn-primary';
+    }
+    currentConfirmCallback = onConfirm;
+
+    confirmModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeConfirmDialog() {
+    if (confirmModal) confirmModal.style.display = 'none';
+    document.body.style.overflow = '';
+    currentConfirmCallback = null;
+  }
+
+  if (confirmModalClose) confirmModalClose.addEventListener('click', closeConfirmDialog);
+  if (confirmModalBackdrop) confirmModalBackdrop.addEventListener('click', closeConfirmDialog);
+  if (confirmModalCancelBtn) confirmModalCancelBtn.addEventListener('click', closeConfirmDialog);
+  if (confirmModalActionBtn) {
+    confirmModalActionBtn.addEventListener('click', async function() {
+      var cb = currentConfirmCallback;
+      closeConfirmDialog();
+      if (cb) {
+        try {
+          await cb();
+        } catch (err) {
+          console.error('Confirm dialog action error:', err);
+        }
+      }
+    });
+  }
+
+  function promptDeleteSong(song) {
+    if (!song || !song.filename) return;
+    showConfirmDialog({
+      title: 'Delete Track from Library?',
+      message: 'Are you sure you want to delete this track? This action permanently removes the audio file from your library and computer.',
+      itemTitle: song.title || 'Untitled Track',
+      itemSub: (song.artist || 'Unknown Artist') + ' • ' + (song.album || 'Library'),
+      confirmText: 'Delete Track',
+      isDanger: true,
+      onConfirm: async function() {
+        await executeDeleteSong(song);
+      }
+    });
+  }
+
+  async function executeDeleteSong(song) {
+    try {
+      var songFilename = song.filename;
+      // If currently playing track is being deleted, stop audio
+      if (currentlyPlayingTrack && (currentlyPlayingTrack.filename === songFilename || currentlyPlayingTrack.title === song.title)) {
+        if (audioEngine) {
+          audioEngine.pause();
+          audioEngine.src = '';
+        }
+        currentlyPlayingTrack = null;
+        if (playerTrackTitle) playerTrackTitle.textContent = 'Select a track';
+        if (playerArtist) playerArtist.textContent = 'Music Studio';
+        if (playerPlayBtn) {
+          var svg = playerPlayBtn.querySelector('svg');
+          if (svg) svg.outerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        }
+      }
+
+      var res = await fetch('/api/songs/' + encodeURIComponent(songFilename), {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'Failed to delete track from disk');
+      }
+
+      showToast('Deleted "' + (song.title || songFilename) + '" from library', 'success');
+      closeDrawer();
+      await loadLibrary();
+    } catch (err) {
+      showToast(err.message || 'Error deleting track', 'error');
+    }
+  }
+
 
   if (drawerCloseBtn) {
     drawerCloseBtn.addEventListener('click', (e) => {
@@ -2241,23 +2391,37 @@ document.addEventListener('DOMContentLoaded', () => {
       // If custom playlist, remove track listener
       const removeBtn = row.querySelector('.btn-row-remove-pl');
       if (removeBtn) {
-        removeBtn.addEventListener('click', async (e) => {
+        removeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          try {
-            const res = await fetch(`/api/playlists/${encodeURIComponent(currentModalPlaylist.id)}/tracks/${idx}`, {
-              method: 'DELETE'
-            });
-            if (res.ok) {
-              const updated = await res.json();
-              currentModalPlaylist.tracks = updated.tracks;
-              renderModalTracklist(currentModalPlaylist.tracks);
-              modalTrackCount.textContent = `${currentModalPlaylist.tracks.length} track${currentModalPlaylist.tracks.length === 1 ? '' : 's'}`;
-              showToast(`Removed from playlist`, 'info');
-              loadUserPlaylists();
+          var trkTitle = track.title || 'this track';
+          var plTitle = currentModalPlaylist.title || 'Playlist';
+          showConfirmDialog({
+            title: 'Remove Track from Playlist?',
+            message: 'Are you sure you want to remove "' + trkTitle + '" from "' + plTitle + '"?',
+            itemTitle: track.title || 'Track',
+            itemSub: track.artist || '',
+            confirmText: 'Remove',
+            isDanger: true,
+            onConfirm: async () => {
+              try {
+                var url = '/api/playlists/' + encodeURIComponent(currentModalPlaylist.id) + '/tracks/' + idx;
+                var res = await fetch(url, {
+                  method: 'DELETE'
+                });
+                if (res.ok) {
+                  var updated = await res.json();
+                  currentModalPlaylist.tracks = updated.tracks;
+                  renderModalTracklist(currentModalPlaylist.tracks);
+                  var count = currentModalPlaylist.tracks.length;
+                  modalTrackCount.textContent = count + (count === 1 ? ' track' : ' tracks');
+                  showToast('Removed from playlist', 'info');
+                  loadUserPlaylists();
+                }
+              } catch (err) {
+                showToast('Failed to remove track', 'error');
+              }
             }
-          } catch (err) {
-            showToast('Failed to remove track', 'error');
-          }
+          });
         });
       }
 
@@ -2533,6 +2697,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       showToast(e.message, 'error');
     }
+  }
+
+  if (drawerDeleteBtn) {
+    drawerDeleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedSong) {
+        promptDeleteSong(selectedSong);
+      }
+    });
   }
 
   if (drawerAddPlaylistBtn) {
