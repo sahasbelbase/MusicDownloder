@@ -12,13 +12,14 @@ import json
 import asyncio
 import shutil
 import base64
+import hashlib
 import urllib.request
 import urllib.parse
 from ssl_helper import safe_urlopen
 import subprocess
 import uuid
 from threading import Thread, Lock
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Response
@@ -1393,9 +1394,156 @@ def stream_audio(filename: str, request: Request):
     except Exception:
         return FileResponse(filepath, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
 
-# ==================== ON-THE-FLY STREAMING ENGINE ====================
+# ==================== ON-THE-FLY STREAMING & DISK CACHE ENGINE ====================
 STREAM_CACHE: Dict[str, dict] = {}
 STREAM_CACHE_LOCK = Lock()
+STREAM_CACHE_DIR = os.path.join(SONGS_DIR, ".stream_cache")
+os.makedirs(STREAM_CACHE_DIR, exist_ok=True)
+ACTIVE_PREFETCHES: set = set()
+ACTIVE_PREFETCHES_LOCK = Lock()
+
+def get_stream_cache_path(query: str):
+    clean = re.sub(r"[\/\\:\*\?" + chr(34) + "<>\|]", "", query).strip().lower()
+    h = hashlib.sha256(clean.encode("utf-8")).hexdigest()[:24]
+    cache_file = os.path.join(STREAM_CACHE_DIR, f"{h}.m4a")
+    tmp_file = os.path.join(STREAM_CACHE_DIR, f"{h}.tmp")
+    return cache_file, tmp_file
+
+def clean_stream_cache(max_size_mb: int = 800):
+    """LRU cache cleaner to keep disk space capped."""
+    try:
+        if not os.path.isdir(STREAM_CACHE_DIR):
+            return
+        files = []
+        total_size = 0
+        for f in os.listdir(STREAM_CACHE_DIR):
+            if f.endswith(".m4a") or f.endswith(".mp3"):
+                p = os.path.join(STREAM_CACHE_DIR, f)
+                st = os.stat(p)
+                files.append((p, st.st_atime, st.st_size))
+                total_size += st.st_size
+        max_bytes = max_size_mb * 1024 * 1024
+        if total_size > max_bytes:
+            files.sort(key=lambda x: x[1])
+            for p, _, size in files:
+                try:
+                    os.remove(p)
+                    total_size -= size
+                    if total_size <= max_bytes * 0.75:
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+def stream_file_with_range(filepath: str, request: Request, content_type: str = "audio/mp4"):
+    stat = os.stat(filepath)
+    file_size = stat.st_size
+
+    try:
+        os.utime(filepath, None)
+    except Exception:
+        pass
+
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+                "Content-Type": content_type,
+            }
+        )
+
+    range_header = request.headers.get("range")
+    if not range_header:
+        return FileResponse(
+            filepath,
+            media_type=content_type,
+            headers={"Accept-Ranges": "bytes"}
+        )
+
+    try:
+        range_value = range_header.strip().lower()
+        if not range_value.startswith("bytes="):
+            return FileResponse(filepath, media_type=content_type, headers={"Accept-Ranges": "bytes"})
+
+        byte_range = range_value[6:].split("-")
+        start = int(byte_range[0]) if byte_range[0] else 0
+        end = int(byte_range[1]) if len(byte_range) > 1 and byte_range[1] else file_size - 1
+
+        if start >= file_size or end >= file_size or start > end:
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"}
+            )
+
+        chunk_size = (end - start) + 1
+
+        def iterfile(start_pos: int, length: int):
+            with open(filepath, mode="rb") as f:
+                f.seek(start_pos)
+                remaining = length
+                chunk = 64 * 1024
+                while remaining > 0:
+                    read_size = min(chunk, remaining)
+                    data = f.read(read_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": content_type,
+        }
+        return StreamingResponse(
+            iterfile(start, chunk_size),
+            status_code=206,
+            headers=headers
+        )
+    except Exception:
+        return FileResponse(filepath, media_type=content_type, headers={"Accept-Ranges": "bytes"})
+
+def download_track_to_cache_worker(query: str):
+    """Background worker to prefetch and cache audio file."""
+    cache_file, tmp_file = get_stream_cache_path(query)
+    if os.path.isfile(cache_file) and os.path.getsize(cache_file) > 100000:
+        return
+
+    with ACTIVE_PREFETCHES_LOCK:
+        if query in ACTIVE_PREFETCHES:
+            return
+        ACTIVE_PREFETCHES.add(query)
+
+    try:
+        stream_info = resolve_stream_url(query)
+        stream_url = stream_info.get("url")
+        if not stream_url:
+            return
+
+        req = urllib.request.Request(stream_url, headers={"User-Agent": "Mozilla/5.0"})
+        with safe_urlopen(req, timeout=15) as upstream, open(tmp_file, "wb") as out_f:
+            while True:
+                chunk = upstream.read(64 * 1024)
+                if not chunk:
+                    break
+                out_f.write(chunk)
+
+        if os.path.isfile(tmp_file) and os.path.getsize(tmp_file) > 100000:
+            os.replace(tmp_file, cache_file)
+            clean_stream_cache()
+    except Exception:
+        if os.path.isfile(tmp_file):
+            try:
+                os.remove(tmp_file)
+            except Exception:
+                pass
+    finally:
+        with ACTIVE_PREFETCHES_LOCK:
+            ACTIVE_PREFETCHES.discard(query)
 
 def resolve_stream_url(query: str) -> dict:
     """Resolve direct audio streaming URL using yt-dlp with caching."""
@@ -1467,23 +1615,29 @@ def get_stream_info(q: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.api_route("/api/stream", methods=["GET", "HEAD"])
-def stream_audio_live(q: str, request: Request):
+def stream_audio_live(q: str, request: Request, background_tasks: BackgroundTasks):
     """
-    Streams audio on-the-fly for any track with full HTTP Range request support
-    for scrubbing, seeking, and immediate playback without downloading.
+    Streams audio on-the-fly for any track with disk caching and full HTTP Range request
+    support for instantaneous scrubbing, seeking, and offline replay.
     """
     if not q or not q.strip():
         raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
 
-    # If already downloaded locally in SONGS_DIR, stream local file directly!
-    clean_q = re.sub(r'[\/\\:\*\?"<>\|]', '', q).lower()
+    # 1. If already downloaded permanently in user's library SONGS_DIR, stream local file directly!
+    clean_q = re.sub(r'[\/\:\*\?"<>\|]', '', q).lower()
     if os.path.isdir(SONGS_DIR):
         for f in os.listdir(SONGS_DIR):
             if f.lower().endswith('.mp3'):
-                f_clean = re.sub(r'[\/\\:\*\?"<>\|]', '', f[:-4]).lower()
+                f_clean = re.sub(r'[\/\:\*\?"<>\|]', '', f[:-4]).lower()
                 if clean_q == f_clean or (len(clean_q) > 4 and clean_q in f_clean):
                     return stream_audio(f, request)
 
+    # 2. If already cached in .stream_cache, serve directly from SSD with 0 latency!
+    cache_file, tmp_file = get_stream_cache_path(q)
+    if os.path.isfile(cache_file) and os.path.getsize(cache_file) > 100000:
+        return stream_file_with_range(cache_file, request, "audio/mp4")
+
+    # 3. Resolve live stream URL
     try:
         stream_info = resolve_stream_url(q)
     except Exception as e:
@@ -1515,23 +1669,80 @@ def stream_audio_live(q: str, request: Request):
             upstream.close()
             return Response(status_code=status_code, headers=resp_headers)
 
-        def iter_stream():
-            try:
-                while True:
-                    chunk = upstream.read(64 * 1024)
-                    if not chunk:
-                        break
-                    yield chunk
-            finally:
-                upstream.close()
+        # If full stream from beginning, cache to disk concurrently!
+        is_full_stream = (not range_header or range_header.strip() == "bytes=0-")
+        if is_full_stream and not os.path.isfile(cache_file):
+            def iter_stream_and_cache():
+                out_f = None
+                try:
+                    out_f = open(tmp_file, "wb")
+                except Exception:
+                    pass
 
-        return StreamingResponse(
-            iter_stream(),
-            status_code=status_code,
-            headers=resp_headers
-        )
+                try:
+                    while True:
+                        chunk = upstream.read(64 * 1024)
+                        if not chunk:
+                            break
+                        if out_f:
+                            try:
+                                out_f.write(chunk)
+                            except Exception:
+                                pass
+                        yield chunk
+
+                    if out_f:
+                        out_f.close()
+                        out_f = None
+                        if os.path.isfile(tmp_file) and os.path.getsize(tmp_file) > 100000:
+                            os.replace(tmp_file, cache_file)
+                            clean_stream_cache()
+                finally:
+                    if out_f:
+                        try:
+                            out_f.close()
+                        except Exception:
+                            pass
+                    upstream.close()
+
+            return StreamingResponse(
+                iter_stream_and_cache(),
+                status_code=status_code,
+                headers=resp_headers
+            )
+        else:
+            # Range stream: proxy upstream and trigger background cache worker for the full file
+            if not os.path.isfile(cache_file):
+                background_tasks.add_task(download_track_to_cache_worker, q)
+
+            def iter_stream():
+                try:
+                    while True:
+                        chunk = upstream.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    upstream.close()
+
+            return StreamingResponse(
+                iter_stream(),
+                status_code=status_code,
+                headers=resp_headers
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upstream stream error: {str(e)}")
+
+@app.api_route("/api/stream/prefetch", methods=["GET", "POST"])
+def prefetch_stream_audio(q: str, background_tasks: BackgroundTasks):
+    """Prefetches and caches the upcoming track in the background for zero-gap playback."""
+    if not q or not q.strip():
+        return {"status": "ignored"}
+    cache_file, _ = get_stream_cache_path(q)
+    if os.path.isfile(cache_file) and os.path.getsize(cache_file) > 100000:
+        return {"status": "already_cached"}
+    background_tasks.add_task(download_track_to_cache_worker, q)
+    return {"status": "prefetching", "query": q}
 
 @app.post("/api/open-folder")
 def open_songs_folder():

@@ -166,6 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalSubtitle = document.getElementById('modal-subtitle');
   const modalTrackCount = document.getElementById('modal-track-count');
   const btnModalDownloadAll = document.getElementById('btn-modal-download-all');
+  const btnModalPlayAll = document.getElementById('btn-modal-play-all');
+  const btnModalShuffle = document.getElementById('btn-modal-shuffle');
   const btnModalFavorite = document.getElementById('btn-modal-favorite');
   const modalFavText = document.getElementById('modal-fav-text');
   const modalTracklist = document.getElementById('modal-tracklist');
@@ -1475,6 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isOnlineStreaming = false;
   let currentOnlineQueue = [];
   let currentOnlineQueueIndex = -1;
+  let hasPrefetchedNextTrack = false;
 
   function normalizeSongString(str) {
     return (str || '')
@@ -1669,6 +1672,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentSongIndex = -1;
     currentStreamingTrack = track;
     hasRecordedPlayForCurrentTrack = false;
+    hasPrefetchedNextTrack = false;
 
     if (queue && queue.length) {
       currentOnlineQueue = queue;
@@ -2043,6 +2047,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check favorite state
     updateModalFavoriteBtnState();
 
+    if (btnModalPlayAll) {
+      btnModalPlayAll.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>${isAlbType ? `Play Album (${count} Songs)` : 'Play / Stream All'}</span>
+      `;
+      btnModalPlayAll.onclick = () => {
+        const tracks = data.tracks || [];
+        if (!tracks.length) {
+          showToast('No tracks available to stream in this collection.', 'warning');
+          return;
+        }
+        playOnlineTrack(tracks[0], tracks, 0);
+        showToast(`Streaming "${data.title}"`, 'info');
+      };
+    }
+
+    if (btnModalShuffle) {
+      btnModalShuffle.onclick = () => {
+        const tracks = data.tracks || [];
+        if (!tracks.length) {
+          showToast('No tracks available to stream in this collection.', 'warning');
+          return;
+        }
+        const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+        playOnlineTrack(shuffled[0], shuffled, 0);
+        showToast(`Shuffling "${data.title}"`, 'info');
+      };
+    }
+
     if (btnModalDownloadAll) {
       btnModalDownloadAll.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2225,6 +2258,20 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
+
+      // Check if this track is currently streaming/playing
+      const isCurrentlyPlaying = isOnlineStreaming && currentStreamingTrack &&
+        (currentStreamingTrack.title === track.title && (currentStreamingTrack.artist === track.artist || !track.artist));
+      if (isCurrentlyPlaying) {
+        row.classList.add('is-playing');
+      }
+
+      // Clicking row streams track live immediately
+      row.title = `Click to stream "${track.title}" live`;
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        playOnlineTrack(track, tracks, idx);
+      });
 
       // Download single track listener
       const dlBtn = row.querySelector('.btn-row-download');
@@ -3120,6 +3167,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       updateNotchProgress(pct, audioEngine.currentTime);
       updateMediaSessionPosition();
+
+      // Intelligent zero-gap next-song prefetching
+      if (isOnlineStreaming && currentOnlineQueue && currentOnlineQueue.length && audioEngine.duration > 25) {
+        if (!hasPrefetchedNextTrack && (audioEngine.currentTime / audioEngine.duration) >= 0.65) {
+          hasPrefetchedNextTrack = true;
+          let nextTrack = null;
+          if (isShuffle) {
+            const pool = currentOnlineQueue.filter((_, i) => i !== currentOnlineQueueIndex);
+            if (pool.length) nextTrack = pool[Math.floor(Math.random() * pool.length)];
+          } else if (currentOnlineQueueIndex < currentOnlineQueue.length - 1) {
+            nextTrack = currentOnlineQueue[currentOnlineQueueIndex + 1];
+          } else if (repeatMode === 'all') {
+            nextTrack = currentOnlineQueue[0];
+          }
+          if (nextTrack) {
+            const nextQuery = nextTrack.query || `${nextTrack.title} ${nextTrack.artist}`;
+            fetch(resolveApiUrl(`/api/stream/prefetch?q=${encodeURIComponent(nextQuery)}`)).catch(() => {});
+          }
+        }
+      }
 
       const now = Date.now();
       if (now - lastPlaybackBroadcast > 1000) {

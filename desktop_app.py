@@ -109,6 +109,29 @@ class TeeLogger:
             except Exception:
                 pass
 
+    def isatty(self):
+        if self.stream and hasattr(self.stream, 'isatty'):
+            try:
+                return self.stream.isatty()
+            except Exception:
+                return False
+        return False
+
+    def fileno(self):
+        if self.stream and hasattr(self.stream, 'fileno'):
+            return self.stream.fileno()
+        raise OSError('fileno not supported')
+
+    @property
+    def encoding(self):
+        if self.stream and hasattr(self.stream, 'encoding'):
+            return self.stream.encoding
+        return 'utf-8'
+
+    @property
+    def closed(self):
+        return False
+
 # Setup safe logging for windowed mode
 log_dir = get_log_dir()
 log_file = os.path.join(log_dir, "desktop_app.log")
