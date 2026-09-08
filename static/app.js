@@ -615,10 +615,42 @@ document.addEventListener('DOMContentLoaded', () => {
             playPrevTrack();
           } else if (data.action === 'seek' && typeof data.time === 'number') {
             audioEngine.currentTime = data.time;
+          } else if (data.action === 'stream_track' || data.action === 'play_stream') {
+            let trackData = null;
+            if (data.filename && data.filename.startsWith('{')) {
+              try {
+                trackData = JSON.parse(data.filename);
+              } catch (e) {}
+            }
+            if (!trackData && data.title) {
+              trackData = {
+                title: data.title,
+                artist: data.artist || '',
+                album: data.album || 'Online Stream',
+                cover_url: data.cover_url || '',
+                duration: data.duration || 0,
+                query: data.query || `${data.title} ${data.artist || ''}`
+              };
+            }
+            if (trackData) {
+              playOnlineTrack(trackData);
+            }
           } else if (data.action === 'play_track') {
             const matchIdx = librarySongs.findIndex(s => s.filename === data.filename || (data.title && s.title.toLowerCase() === data.title.toLowerCase()));
             if (matchIdx >= 0) {
               playTrack(matchIdx);
+            } else if (data.filename && data.filename.startsWith('{')) {
+              try {
+                const trackData = JSON.parse(data.filename);
+                playOnlineTrack(trackData);
+              } catch (e) {}
+            } else if (data.title) {
+              playOnlineTrack({
+                title: data.title,
+                artist: data.artist || '',
+                album: 'Online Stream',
+                query: data.title
+              });
             }
           } else if (data.action === 'play_index' && typeof data.index === 'number') {
             if (data.index >= 0 && data.index < librarySongs.length) {
@@ -1467,14 +1499,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 2. Loose match: title contains or filename contains
+    // 2. Loose match: title contains or filename contains (only if artist also matches)
     for (const song of rawLibrarySongs) {
       const sTitle = normalizeSongString(song.title);
+      const sArtist = normalizeSongString(song.artist);
       const sFile = normalizeSongString(song.filename);
-      if (sTitle && tTitle && (sTitle.includes(tTitle) || tTitle.includes(sTitle))) {
+      const artistMatches = !tArtist || !sArtist || sArtist.includes(tArtist) || tArtist.includes(sArtist);
+      if (artistMatches && sTitle && tTitle && (sTitle.includes(tTitle) || tTitle.includes(sTitle))) {
         return song;
       }
-      if (sFile && tTitle && sFile.includes(tTitle)) {
+      if (artistMatches && sFile && tTitle && sFile.includes(tTitle)) {
         return song;
       }
     }
@@ -1710,6 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isPlaying = true;
     updatePlayIcon(true);
     highlightPlayingRow();
+    broadcastPlaybackState();
     showToast(`Streaming live: ${track.title} - ${track.artist}`, 'info');
   }
 
@@ -2990,11 +3025,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let album = '';
     let coverUrl = 'placeholder.svg';
 
-    if (isOnlineStreaming && currentStreamMeta) {
-      title = currentStreamMeta.title || title;
-      artist = currentStreamMeta.artist || artist;
-      album = currentStreamMeta.album || album;
-      coverUrl = currentStreamMeta.cover_url || coverUrl;
+    if (isOnlineStreaming && (currentStreamingTrack || currentStreamMeta)) {
+      const cur = currentStreamingTrack || currentStreamMeta;
+      title = cur.title || 'Online Stream';
+      artist = cur.artist || 'Music Studio';
+      album = cur.album || 'Online Stream';
+      coverUrl = cur.cover_url || cur.artwork_url || 'placeholder.svg';
     } else if (currentSongIndex >= 0 && librarySongs[currentSongIndex]) {
       const s = librarySongs[currentSongIndex];
       title = s.title || title;
@@ -3002,6 +3038,12 @@ document.addEventListener('DOMContentLoaded', () => {
       album = s.album || album;
       coverUrl = `/api/songs/artwork/${encodeURIComponent(s.filename)}`;
     }
+
+    let dur = (audioEngine.duration && isFinite(audioEngine.duration)) ? audioEngine.duration : 0;
+    if ((!dur || dur <= 0) && isOnlineStreaming && currentStreamingTrack && currentStreamingTrack.duration) {
+      dur = currentStreamingTrack.duration;
+    }
+    let curTime = (audioEngine.currentTime && isFinite(audioEngine.currentTime)) ? audioEngine.currentTime : 0;
 
     fetch('/api/playback', {
       method: 'POST',
@@ -3012,8 +3054,8 @@ document.addEventListener('DOMContentLoaded', () => {
         artist: artist,
         album: album,
         cover_url: coverUrl,
-        current_time: audioEngine.currentTime || 0,
-        duration: audioEngine.duration || 0,
+        current_time: curTime,
+        duration: dur,
         index: currentSongIndex
       })
     }).catch(() => {});

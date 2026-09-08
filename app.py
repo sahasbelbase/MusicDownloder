@@ -1558,7 +1558,16 @@ class PlaybackActionPayload(BaseModel):
     time: Optional[float] = None
     filename: Optional[str] = None
     title: Optional[str] = None
+    artist: Optional[str] = None
+    album: Optional[str] = None
+    cover_url: Optional[str] = None
+    query: Optional[str] = None
+    duration: Optional[float] = None
     index: Optional[int] = None
+    track: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "allow" 
 
 current_playback_state = {
     "is_playing": False,
