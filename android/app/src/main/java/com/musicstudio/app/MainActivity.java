@@ -8,6 +8,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,7 +18,11 @@ import android.provider.MediaStore;
 import android.app.DownloadManager;
 import android.media.MediaScannerConnection;
 import android.os.Environment;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -222,12 +229,41 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public String getTrackArtwork(String filePath) {
+            if (filePath == null || filePath.isEmpty()) return "";
+            MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+            try {
+                mmr.setDataSource(filePath);
+                byte[] rawArt = mmr.getEmbeddedPicture();
+                if (rawArt != null && rawArt.length > 0) {
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
+                    if (bitmap != null) {
+                        int targetSize = 140;
+                        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
+                        byte[] jpegBytes = out.toByteArray();
+                        scaled.recycle();
+                        bitmap.recycle();
+                        return "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+                    }
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try { mmr.release(); } catch (Exception ignored) {}
+            }
+            return "";
+        }
+
+        @JavascriptInterface
         public String scanDeviceAudio() {
             JSONArray songArray = new JSONArray();
             if (!hasPermission()) {
                 requestAudioPermissions();
                 return songArray.toString();
             }
+
+            Map<String, String> albumCoverCache = new HashMap<>();
 
             try {
                 Uri collection;
@@ -279,11 +315,78 @@ public class MainActivity extends BridgeActivity {
 
                             if (dataPath == null || dataPath.isEmpty()) continue;
 
+                            String cleanTitle = (title != null && !title.isEmpty()) ? title : "Unknown Title";
+                            String cleanArtist = (artist != null && !artist.equals("<unknown>") && !artist.isEmpty()) ? artist : "Mobile Audio";
+                            String cleanAlbum = (album != null && !album.equals("<unknown>") && !album.isEmpty()) ? album : "Device Music";
+                            String songGenre = "General";
+
+                            String albumKey = cleanArtist + "_" + cleanAlbum;
+                            String coverUrl = albumCoverCache.get(albumKey);
+
+                            if (coverUrl == null) {
+                                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                                try {
+                                    mmr.setDataSource(dataPath);
+                                    byte[] rawArt = mmr.getEmbeddedPicture();
+                                    if (rawArt != null && rawArt.length > 0) {
+                                        Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
+                                        if (bitmap != null) {
+                                            int targetSize = 140;
+                                            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
+                                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                            scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
+                                            byte[] jpegBytes = out.toByteArray();
+                                            scaled.recycle();
+                                            bitmap.recycle();
+                                            coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+                                        }
+                                    }
+
+                                    // Fallback to folder artwork (cover.jpg, folder.jpg) if no embedded art
+                                    if (coverUrl == null) {
+                                        File parentDir = new File(dataPath).getParentFile();
+                                        if (parentDir != null && parentDir.isDirectory()) {
+                                            String[] candidates = {"cover.jpg", "cover.png", "folder.jpg", "album.jpg", "art.jpg"};
+                                            for (String cand : candidates) {
+                                                File candFile = new File(parentDir, cand);
+                                                if (candFile.exists() && candFile.length() > 0) {
+                                                    Bitmap bitmap = BitmapFactory.decodeFile(candFile.getAbsolutePath());
+                                                    if (bitmap != null) {
+                                                        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, 140, 140, true);
+                                                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                                        scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
+                                                        byte[] jpegBytes = out.toByteArray();
+                                                        scaled.recycle();
+                                                        bitmap.recycle();
+                                                        coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    String genreMeta = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
+                                    if (genreMeta != null && !genreMeta.trim().isEmpty()) {
+                                        songGenre = genreMeta.trim();
+                                    }
+                                } catch (Exception ignored) {
+                                } finally {
+                                    try { mmr.release(); } catch (Exception ignored) {}
+                                }
+
+                                if (coverUrl == null) {
+                                    coverUrl = "placeholder.svg";
+                                }
+                                albumCoverCache.put(albumKey, coverUrl);
+                            }
+
                             JSONObject song = new JSONObject();
                             song.put("id", "android_" + id);
-                            song.put("title", (title != null && !title.isEmpty()) ? title : "Unknown Title");
-                            song.put("artist", (artist != null && !artist.equals("<unknown>") && !artist.isEmpty()) ? artist : "Mobile Audio");
-                            song.put("album", (album != null && !album.equals("<unknown>") && !album.isEmpty()) ? album : "Device Music");
+                            song.put("title", cleanTitle);
+                            song.put("artist", cleanArtist);
+                            song.put("album", cleanAlbum);
+                            song.put("genre", songGenre);
                             song.put("duration", durationMs > 0 ? Math.round(durationMs / 1000.0) : 0);
                             song.put("size_mb", Math.round((sizeBytes / (1024.0 * 1024.0)) * 100.0) / 100.0);
                             song.put("filename", dataPath);
@@ -292,7 +395,7 @@ public class MainActivity extends BridgeActivity {
                             song.put("is_local_device", true);
                             song.put("is_android_mediastore", true);
                             song.put("mtime", mtime);
-                            song.put("cover_url", "placeholder.svg");
+                            song.put("cover_url", coverUrl);
 
                             songArray.put(song);
                         }
