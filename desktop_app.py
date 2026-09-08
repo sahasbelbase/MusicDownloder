@@ -16,6 +16,14 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+# Set Windows AppUserModelID so taskbar groups properly under Music Studio icon
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('com.musicstudio.app')
+    except Exception:
+        pass
+
 def get_log_dir() -> str:
     """Return OS-appropriate log directory."""
     if sys.platform == "win32":

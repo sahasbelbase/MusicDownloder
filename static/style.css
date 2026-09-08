@@ -4713,3 +4713,276 @@ input[type="range"]:hover::-webkit-slider-thumb {
   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
   transform: translateY(-1px);
 }
+
+
+/* ==========================================================================
+   PLATFORM NOTCH SUPPRESSION (WINDOWS & ANDROID)
+   ========================================================================== */
+body.not-mac #mac-notch-hud,
+body.platform-windows #mac-notch-hud,
+body.platform-android #mac-notch-hud {
+  display: none !important;
+}
+
+/* ==========================================================================
+   ENHANCED GENRE CARDS & DIVERSE ICONS
+   ========================================================================== */
+.group-card.genre-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  cursor: pointer;
+}
+.group-card.genre-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.genre-badge-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.85rem;
+  margin-bottom: 12px;
+  transition: transform 0.25s ease;
+}
+.group-card.genre-card:hover .genre-badge-icon {
+  transform: scale(1.08) rotate(3deg);
+}
+
+/* ==========================================================================
+   SPOTIFY-STYLE PLAY QUEUE DRAWER & DRAG-AND-DROP
+   ========================================================================== */
+.queue-btn {
+  position: relative;
+}
+.queue-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--accent-emerald, #10b981);
+  color: #000;
+  font-size: 0.65rem;
+  font-weight: 800;
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: 999px;
+  text-align: center;
+  padding: 0 3px;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  pointer-events: none;
+}
+
+.queue-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+  z-index: 1900;
+}
+.queue-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.queue-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 92vw;
+  background: rgba(13, 16, 23, 0.96);
+  backdrop-filter: blur(28px);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1950;
+}
+.queue-drawer.is-open {
+  transform: translateX(0);
+}
+
+.queue-header {
+  padding: 22px 24px 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.queue-header-title h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.queue-count-sub {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  display: block;
+}
+.queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-clear-queue {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-clear-queue:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.queue-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px 100px 20px;
+}
+.queue-section {
+  margin-bottom: 26px;
+}
+.queue-section-header {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+}
+
+.queue-now-playing-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md);
+}
+.queue-item-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+}
+.queue-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.queue-item-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.queue-item-artist {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.queue-live-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 16px;
+  padding-right: 4px;
+}
+.queue-live-eq span {
+  width: 3px;
+  background: var(--accent-emerald, #10b981);
+  border-radius: 2px;
+  animation: eqBounce 1.2s infinite ease-in-out;
+}
+.queue-live-eq span:nth-child(2) { animation-delay: 0.2s; }
+.queue-live-eq span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes eqBounce {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  user-select: none;
+  transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+.queue-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.queue-item.dragging {
+  opacity: 0.35;
+  border: 1px dashed var(--accent-emerald, #10b981);
+  transform: scale(0.98);
+}
+.queue-item.drag-over {
+  border-top: 2px solid var(--accent-emerald, #10b981);
+  background: rgba(16, 185, 129, 0.12);
+}
+.queue-item-drag {
+  color: var(--text-tertiary);
+  cursor: grab;
+  padding: 4px 2px;
+  display: flex;
+  align-items: center;
+}
+.queue-item-drag:active {
+  cursor: grabbing;
+}
+.queue-item-drag:hover {
+  color: var(--text-primary);
+}
+.queue-item-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.queue-item-remove:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+.queue-empty-msg {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+}

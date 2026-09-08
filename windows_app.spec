@@ -95,5 +95,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(BASE_DIR, 'static', 'favicon.ico') if os.path.exists(os.path.join(BASE_DIR, 'static', 'favicon.ico')) else None,
+    icon=os.path.join(BASE_DIR, 'MusicStudio.ico') if os.path.exists(os.path.join(BASE_DIR, 'MusicStudio.ico')) else None,
 )

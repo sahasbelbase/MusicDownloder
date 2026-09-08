@@ -584,6 +584,17 @@
         </div>
 
         <div class="dock-volume-col">
+          <button class="volume-btn queue-btn" id="player-queue-btn" title="Open Play Queue">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <polyline points="3 6 4 7 6 5"/>
+              <polyline points="3 12 4 13 6 11"/>
+              <polyline points="3 18 4 19 6 17"/>
+            </svg>
+            <span class="queue-badge" id="queue-badge" style="display: none;">0</span>
+          </button>
           <button class="volume-btn" id="player-mute-btn" title="Mute / Unmute">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" id="volume-icon">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -651,6 +662,17 @@
             </svg>
             <span>Play Now</span>
           </button>
+          <button class="btn-drawer-add-playlist" id="drawer-queue-btn" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #34d399;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <polyline points="3 6 4 7 6 5"/>
+              <polyline points="3 12 4 13 6 11"/>
+              <polyline points="3 18 4 19 6 17"/>
+            </svg>
+            <span>Add to Queue</span>
+          </button>
           <button class="btn-drawer-add-playlist" id="drawer-add-playlist-btn">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"/>
@@ -670,6 +692,61 @@
         </div>
       </div>
     </aside>
+    <!-- Slide-in Queue Panel / Drawer -->
+    <div class="queue-overlay" id="queue-overlay"></div>
+    <aside class="queue-drawer glass" id="queue-drawer">
+      <div class="queue-header">
+        <div class="queue-header-title">
+          <h3>Play Queue</h3>
+          <span class="queue-count-sub" id="queue-count-label">0 tracks queued</span>
+        </div>
+        <div class="queue-header-actions">
+          <button class="btn-clear-queue" id="btn-clear-queue" title="Clear All Queued Tracks">Clear All</button>
+          <button class="drawer-close-btn" id="queue-close-btn" title="Close Queue">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="queue-body">
+        <!-- Now Playing Section -->
+        <div class="queue-section">
+          <div class="queue-section-header">NOW PLAYING</div>
+          <div class="queue-now-playing-item" id="queue-now-playing">
+            <img id="queue-np-cover" src="placeholder.svg" class="queue-item-thumb" />
+            <div class="queue-item-info">
+              <div class="queue-item-title truncate" id="queue-np-title">No track selected</div>
+              <div class="queue-item-artist truncate" id="queue-np-artist">Music Studio Engine</div>
+            </div>
+            <div class="queue-live-eq" id="queue-np-eq">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Next in Queue Section (User Added) -->
+        <div class="queue-section">
+          <div class="queue-section-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>NEXT IN QUEUE</span>
+            <span style="font-size: 0.68rem; color: var(--text-tertiary); text-transform: none; font-weight: normal;">Drag to reorder</span>
+          </div>
+          <div class="queue-list" id="queue-user-list">
+            <!-- Populated dynamically with drag & drop items -->
+          </div>
+        </div>
+
+        <!-- Next Up from Context Section -->
+        <div class="queue-section">
+          <div class="queue-section-header" id="queue-context-header">NEXT FROM CURRENT PLAYLIST / LIBRARY</div>
+          <div class="queue-list" id="queue-context-list">
+            <!-- Populated dynamically with upcoming tracks -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
 
     <!-- Playlist Preview Modal -->
     <div id="playlist-modal" class="modal-root" style="display: none;">
@@ -916,7 +993,18 @@
           </div>
         </div>
 
-        <button class="fs-icon-btn" id="fs-drawer-btn" title="Track Inspector">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="fs-icon-btn" id="fs-queue-btn" title="Open Play Queue">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <polyline points="3 6 4 7 6 5"/>
+              <polyline points="3 12 4 13 6 11"/>
+              <polyline points="3 18 4 19 6 17"/>
+            </svg>
+          </button>
+          <button class="fs-icon-btn" id="fs-drawer-btn" title="Track Inspector">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="1"></circle>
             <circle cx="12" cy="5" r="1"></circle>
