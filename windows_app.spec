@@ -8,8 +8,14 @@ BASE_DIR = os.path.abspath(SPECPATH)
 
 # Windows FFmpeg check
 binaries = []
-ffmpeg_win = shutil.which("ffmpeg")
-if ffmpeg_win:
+ffmpeg_win = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+if not ffmpeg_win:
+    try:
+        import imageio_ffmpeg
+        ffmpeg_win = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+if ffmpeg_win and os.path.exists(ffmpeg_win):
     binaries.append((ffmpeg_win, '.'))
 
 datas = [
@@ -33,6 +39,7 @@ hiddenimports = [
     'uvicorn.lifespans.off',
     'fastapi',
     'pydantic',
+    'python_multipart',
     'mutagen',
     'mutagen.mp3',
     'mutagen.id3',
@@ -43,6 +50,7 @@ hiddenimports = [
     'webview',
     'PIL',
     'PIL.Image',
+    'imageio_ffmpeg',
     'app',
     'download_playlist',
     'discovery',

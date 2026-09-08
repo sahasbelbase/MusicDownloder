@@ -16,22 +16,149 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+def get_log_dir() -> str:
+    """Return OS-appropriate log directory."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.path.expanduser("~")
+        path = os.path.join(base, "MusicStudio", "Logs")
+    elif sys.platform == "darwin":
+        path = os.path.expanduser("~/Library/Logs/MusicStudio")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+        path = os.path.join(base, "MusicStudio", "logs")
+
+    try:
+        os.makedirs(path, exist_ok=True)
+        return path
+    except Exception:
+        fallback = os.path.join(BASE_DIR, "logs")
+        try:
+            os.makedirs(fallback, exist_ok=True)
+            return fallback
+        except Exception:
+            return BASE_DIR
+
+def show_error_dialog(title: str, message: str):
+    """Display a native error dialog so crashes are never silent on any OS."""
+    try:
+        if sys.__stderr__:
+            sys.__stderr__.write(f"[{title}] {message}\n")
+            sys.__stderr__.flush()
+    except Exception:
+        pass
+
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            # MB_ICONERROR (0x10) | MB_OK (0x0) | MB_SYSTEMMODAL (0x1000)
+            ctypes.windll.user32.MessageBoxW(0, message, title, 0x10 | 0x1000)
+            return
+        except Exception:
+            pass
+    elif sys.platform == "darwin":
+        try:
+            import subprocess
+            escaped_msg = message.replace('\\', '\\\\').replace('"', '\\"')
+            escaped_title = title.replace('\\', '\\\\').replace('"', '\\"')
+            subprocess.run([
+                "osascript", "-e",
+                f'display alert "{escaped_title}" message "{escaped_msg}" as critical'
+            ], timeout=5)
+            return
+        except Exception:
+            pass
+    elif sys.platform.startswith("linux"):
+        try:
+            import subprocess
+            subprocess.run(["zenity", "--error", f"--text={message}", f"--title={title}"], timeout=5)
+            return
+        except Exception:
+            pass
+
+class TeeLogger:
+    def __init__(self, stream, file_path):
+        self.stream = stream
+        try:
+            self.file = open(file_path, "a", encoding="utf-8")
+        except Exception:
+            self.file = None
+
+    def write(self, data):
+        if self.stream:
+            try:
+                self.stream.write(data)
+                self.stream.flush()
+            except Exception:
+                pass
+        if self.file:
+            try:
+                self.file.write(data)
+                self.file.flush()
+            except Exception:
+                pass
+
+    def flush(self):
+        if self.stream:
+            try:
+                self.stream.flush()
+            except Exception:
+                pass
+        if self.file:
+            try:
+                self.file.flush()
+            except Exception:
+                pass
+
 # Setup safe logging for windowed mode
-log_dir = os.path.expanduser("~/Library/Logs/MusicStudio")
+log_dir = get_log_dir()
+log_file = os.path.join(log_dir, "desktop_app.log")
 try:
-    os.makedirs(log_dir, exist_ok=True)
-    log_fp = open(os.path.join(log_dir, "desktop_app.log"), "a", encoding="utf-8")
-    sys.stdout = log_fp
-    sys.stderr = log_fp
+    if sys.stdout is not None:
+        sys.stdout = TeeLogger(sys.stdout, log_file)
+    else:
+        sys.stdout = open(log_file, "a", encoding="utf-8")
+    if sys.stderr is not None:
+        sys.stderr = TeeLogger(sys.stderr, log_file)
+    else:
+        sys.stderr = open(log_file, "a", encoding="utf-8")
 except Exception:
     if sys.stdout is None:
         sys.stdout = open(os.devnull, 'w')
     if sys.stderr is None:
         sys.stderr = open(os.devnull, 'w')
 
-import uvicorn
-import ssl_helper  # Configure CA certificates & SSL bypass globally
-from app import app, SONGS_DIR
+# Guarded top-level imports with native graphical error dialog
+try:
+    import uvicorn
+    import ssl_helper  # Configure CA certificates & SSL bypass globally
+    from app import app, SONGS_DIR
+except Exception as err:
+    import traceback
+    tb = traceback.format_exc()
+    startup_err_file = os.path.join(log_dir, "startup_error.log")
+    try:
+        with open(startup_err_file, "w", encoding="utf-8") as f:
+            f.write(tb)
+    except Exception:
+        pass
+
+    missing_hint = ""
+    err_str = str(err)
+    if "No module named" in err_str or isinstance(err, ModuleNotFoundError):
+        missing_module = err_str.split("No module named")[-1].strip(" '\"")
+        missing_hint = (
+            f"\n\nMissing Python module: {missing_module}\n"
+            f"To fix this automatically, run MusicStudio.bat or install dependencies:\n"
+            f"  python -m pip install -r requirements.txt"
+        )
+
+    diag_msg = (
+        f"Music Studio encountered a startup error:\n\n"
+        f"{err_str}{missing_hint}\n\n"
+        f"Detailed log saved to:\n{startup_err_file}"
+    )
+    show_error_dialog("Music Studio — Startup Error", diag_msg)
+    sys.exit(1)
 
 def find_available_port(default_port=5050):
     """Check if default port is free, or pick an available one."""
@@ -80,7 +207,9 @@ def main():
     server_thread.start()
 
     if not wait_for_server(port):
-        print(f"Error: Music Studio server failed to start on port {port}")
+        err_msg = f"Music Studio server failed to start on port {port} within 10 seconds."
+        print(f"Error: {err_msg}")
+        show_error_dialog("Music Studio Server Error", err_msg)
         sys.exit(1)
 
     url = f"http://127.0.0.1:{port}"
@@ -167,9 +296,11 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         err_text = traceback.format_exc()
+        crash_log = os.path.join(log_dir, "crash.log")
         try:
-            with open(os.path.expanduser("~/Library/Logs/MusicStudio/crash.log"), "w", encoding="utf-8") as f:
+            with open(crash_log, "w", encoding="utf-8") as f:
                 f.write(err_text)
         except Exception:
             pass
+        show_error_dialog("Music Studio — Crash", f"An unexpected error occurred:\n\n{str(e)}\n\nCrash log saved to:\n{crash_log}")
         sys.exit(1)

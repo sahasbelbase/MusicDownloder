@@ -615,6 +615,15 @@ document.addEventListener('DOMContentLoaded', () => {
             playPrevTrack();
           } else if (data.action === 'seek' && typeof data.time === 'number') {
             audioEngine.currentTime = data.time;
+          } else if (data.action === 'play_track') {
+            const matchIdx = librarySongs.findIndex(s => s.filename === data.filename || (data.title && s.title.toLowerCase() === data.title.toLowerCase()));
+            if (matchIdx >= 0) {
+              playTrack(matchIdx);
+            }
+          } else if (data.action === 'play_index' && typeof data.index === 'number') {
+            if (data.index >= 0 && data.index < librarySongs.length) {
+              playTrack(data.index);
+            }
           }
         }
       } catch (err) {

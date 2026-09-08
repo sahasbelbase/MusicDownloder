@@ -88,11 +88,18 @@ All installable and portable packages are available in this folder for easy shar
 ### How to Run on Windows:
 1. Extract `MusicStudio-Windows-x64.zip`.
 2. Double-click **`MusicStudio.exe`** (or **`MusicStudio.bat`**).
-3. The app starts and opens the player window with full support for:
+3. On first launch, Music Studio will automatically detect your Python installation and offer to auto-install required components (`fastapi`, `yt-dlp`, `pywebview`, `pillow`, and the embedded FFmpeg provider).
+4. The desktop player window opens with full support for:
    - 320kbps audio playback & streaming
    - Automatic universal ID3v2.3 metadata & HD album covers
    - Custom playlist creation & Spotify/YouTube Music import
-   - Offline library access
+   - 100% offline library access
+   - Zero-config FFmpeg conversion (no manual PATH setup needed)
+
+### Windows Troubleshooting:
+- If you encounter startup issues, double-click **`MusicStudio.bat`** to run in console mode with live log streaming.
+- Log files are saved to `%LOCALAPPDATA%\MusicStudio\Logs\desktop_app.log`.
+- To install all dependencies manually: `pip install -r requirements.txt`.
 
 ### Optional: Compile a 1-file standalone EXE directly on Windows
 - Double-click `build_windows.bat` inside the folder. It will use PyInstaller to produce a single `MusicStudio.exe` in `dist/`.

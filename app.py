@@ -1556,6 +1556,9 @@ class PlaybackStatePayload(BaseModel):
 class PlaybackActionPayload(BaseModel):
     action: str
     time: Optional[float] = None
+    filename: Optional[str] = None
+    title: Optional[str] = None
+    index: Optional[int] = None
 
 current_playback_state = {
     "is_playing": False,

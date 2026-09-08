@@ -155,32 +155,70 @@ def clean_track_artist_and_title(raw_title: str, raw_artist: str = "") -> Tuple[
     return artist, title
 
 def find_ffmpeg() -> str:
-    """Find FFmpeg binary in bundled paths, system PATH, or Homebrew."""
+    """Find FFmpeg binary in bundled paths, system PATH, imageio-ffmpeg, or standard locations."""
     # 1. PyInstaller bundled temp directory
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         bundle_ffmpeg = os.path.join(sys._MEIPASS, "ffmpeg")
-        if os.path.isfile(bundle_ffmpeg) and os.access(bundle_ffmpeg, os.X_OK):
+        if os.path.isfile(bundle_ffmpeg) and (sys.platform == "win32" or os.access(bundle_ffmpeg, os.X_OK)):
             return bundle_ffmpeg
         bundle_ffmpeg_win = os.path.join(sys._MEIPASS, "ffmpeg.exe")
         if os.path.isfile(bundle_ffmpeg_win):
             return bundle_ffmpeg_win
 
-    # 2. Next to executable
-    exe_dir = os.path.dirname(sys.executable)
-    local_ffmpeg = os.path.join(exe_dir, "ffmpeg")
-    if os.path.isfile(local_ffmpeg) and os.access(local_ffmpeg, os.X_OK):
-        return local_ffmpeg
-    local_ffmpeg_win = os.path.join(exe_dir, "ffmpeg.exe")
-    if os.path.isfile(local_ffmpeg_win):
-        return local_ffmpeg_win
+    # 2. Next to executable or current app directory
+    base_dirs = [
+        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(sys.executable),
+        getattr(sys, '_MEIPASS', ''),
+    ]
+    for b_dir in base_dirs:
+        if not b_dir:
+            continue
+        candidates = [
+            os.path.join(b_dir, "ffmpeg.exe"),
+            os.path.join(b_dir, "ffmpeg"),
+            os.path.join(b_dir, "bin", "ffmpeg.exe"),
+            os.path.join(b_dir, "bin", "ffmpeg"),
+            os.path.join(b_dir, "runtime", "ffmpeg.exe"),
+            os.path.join(b_dir, "runtime", "bin", "ffmpeg.exe"),
+        ]
+        for c in candidates:
+            if os.path.isfile(c) and (sys.platform == "win32" or os.access(c, os.X_OK)):
+                return c
 
     # 3. System PATH
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if ffmpeg_bin:
-        return ffmpeg_bin
+    for cmd in ["ffmpeg", "ffmpeg.exe"]:
+        ffmpeg_bin = shutil.which(cmd)
+        if ffmpeg_bin:
+            return ffmpeg_bin
 
-    # 4. Standard Mac & Common Paths
-    mac_paths = [
+    # 4. Check imageio-ffmpeg (zero-config embedded Python wheel)
+    try:
+        import imageio_ffmpeg
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if ffmpeg_exe and os.path.isfile(ffmpeg_exe):
+            return ffmpeg_exe
+    except Exception:
+        pass
+
+    # 5. Windows common installation paths
+    if sys.platform == "win32":
+        win_paths = [
+            os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\ffmpeg\bin\ffmpeg.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\ffmpeg\bin\ffmpeg.exe"),
+            os.path.expandvars(r"%PROGRAMFILES(X86)%\ffmpeg\bin\ffmpeg.exe"),
+            r"C:\ffmpeg\bin\ffmpeg.exe",
+            os.path.expandvars(r"%USERPROFILE%\scoop\shims\ffmpeg.exe"),
+            os.path.expandvars(r"%ALLUSERSPROFILE%\chocolatey\bin\ffmpeg.exe"),
+            os.path.expanduser(r"~\.musicstudio\bin\ffmpeg.exe"),
+        ]
+        for path in win_paths:
+            if os.path.isfile(path):
+                return path
+
+    # 6. macOS / Unix common paths
+    unix_paths = [
         "/opt/homebrew/bin/ffmpeg",
         "/usr/local/bin/ffmpeg",
         "/usr/bin/ffmpeg",
@@ -188,17 +226,41 @@ def find_ffmpeg() -> str:
         os.path.expanduser("~/.musicstudio/bin/ffmpeg"),
         os.path.expanduser("~/bin/ffmpeg")
     ]
-    for path in mac_paths:
+    for path in unix_paths:
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
     return ""
 
 def check_dependencies() -> str:
-    """Verify FFmpeg and yt-dlp are available."""
+    """Verify FFmpeg and yt-dlp are available, attempting auto-recovery if needed."""
     ffmpeg_bin = find_ffmpeg()
     if not ffmpeg_bin:
+        # Attempt to auto-install imageio-ffmpeg as on-demand fallback
+        try:
+            log("⚠️ FFmpeg binary not found. Attempting to install imageio-ffmpeg...", Colors.YELLOW)
+            import subprocess
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "imageio-ffmpeg"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            import imageio_ffmpeg
+            ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
+            if ffmpeg_bin and os.path.isfile(ffmpeg_bin):
+                log(f"✅ FFmpeg resolved via imageio-ffmpeg: {ffmpeg_bin}", Colors.GREEN)
+                return ffmpeg_bin
+        except Exception:
+            pass
+
+    if not ffmpeg_bin:
         log("❌ Error: FFmpeg not found on your system!", Colors.RED)
-        log("💡 Install using Homebrew: brew install ffmpeg", Colors.YELLOW)
+        if sys.platform == "win32":
+            log("💡 On Windows, run in PowerShell: winget install Gyan.FFmpeg", Colors.YELLOW)
+            log("   or install imageio-ffmpeg: python -m pip install imageio-ffmpeg", Colors.YELLOW)
+        elif sys.platform == "darwin":
+            log("💡 Install using Homebrew: brew install ffmpeg", Colors.YELLOW)
+        else:
+            log("💡 Install using package manager: sudo apt install ffmpeg", Colors.YELLOW)
         sys.exit(1)
 
     try:
