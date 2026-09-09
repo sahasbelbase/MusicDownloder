@@ -2,6 +2,11 @@ package com.musicstudio.app;
 
 import android.Manifest;
 import android.app.DownloadManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.WallpaperManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -12,6 +17,13 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Icon;
 import android.media.MediaMetadata;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaScannerConnection;
@@ -25,6 +37,7 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Base64;
+import android.util.DisplayMetrics;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -40,18 +53,26 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MainActivity extends BridgeActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 2026;
+    private static final String NOTIFICATION_CHANNEL_ID = "music_studio_playback";
+    private static final int NOTIFICATION_ID = 2026;
+
     private static MainActivity instance;
 
     private MediaSession mediaSession;
     private String pendingMediaAction = null;
     private String pendingOpenAudioJson = null;
     private final Map<String, Bitmap> coverBitmapCache = new HashMap<>();
+
+    private boolean isLockscreenWallpaperEnabled = true;
+    private String currentWallpaperTrackKey = null;
 
     public static MainActivity getInstance() {
         return instance;
@@ -117,6 +138,7 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new AndroidMusicBridge(), "AndroidMusicScanner");
         }
 
+        createNotificationChannel();
         initMediaSession();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -128,6 +150,25 @@ public class MainActivity extends BridgeActivity {
         handleIncomingIntent(getIntent());
 
         requestAudioPermissions();
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                NotificationChannel channel = new NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    "Music Playback",
+                    NotificationManager.IMPORTANCE_LOW
+                );
+                channel.setDescription("Music Studio notification bar playback controls");
+                channel.setShowBadge(false);
+                channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                channel.enableVibration(false);
+                channel.setSound(null, null);
+                nm.createNotificationChannel(channel);
+            }
+        }
     }
 
     private void initMediaSession() {
@@ -228,7 +269,12 @@ public class MainActivity extends BridgeActivity {
                     if (nameIdx != -1) {
                         String displayName = c.getString(nameIdx);
                         if (displayName != null && !displayName.isEmpty()) {
-                            int dotIdx = displayName.lastIndexOf("."); if (dotIdx > 0) { title = displayName.substring(0, dotIdx); } else { title = displayName; }
+                            int dotIdx = displayName.lastIndexOf(".");
+                            if (dotIdx > 0) {
+                                title = displayName.substring(0, dotIdx);
+                            } else {
+                                title = displayName;
+                            }
                         }
                     }
                 }
@@ -280,6 +326,176 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void updateNotification(String title, String artist, String album, boolean isPlaying, Bitmap cover) {
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+
+            Intent openIntent = new Intent(this, MainActivity.class);
+            openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            PendingIntent openPI = PendingIntent.getActivity(this, 0, openIntent, flags);
+
+            Intent prevIntent = new Intent(this, MusicWidgetProvider.class);
+            prevIntent.setAction(MusicWidgetProvider.ACTION_WIDGET_PREV);
+            PendingIntent prevPI = PendingIntent.getBroadcast(this, 10, prevIntent, flags);
+
+            Intent playPauseIntent = new Intent(this, MusicWidgetProvider.class);
+            playPauseIntent.setAction(MusicWidgetProvider.ACTION_WIDGET_PLAY_PAUSE);
+            PendingIntent playPausePI = PendingIntent.getBroadcast(this, 11, playPauseIntent, flags);
+
+            Intent nextIntent = new Intent(this, MusicWidgetProvider.class);
+            nextIntent.setAction(MusicWidgetProvider.ACTION_WIDGET_NEXT);
+            PendingIntent nextPI = PendingIntent.getBroadcast(this, 12, nextIntent, flags);
+
+            Notification.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                builder = new Notification.Builder(this, NOTIFICATION_CHANNEL_ID);
+            } else {
+                builder = new Notification.Builder(this);
+            }
+
+            builder.setContentTitle(title)
+                   .setContentText(artist)
+                   .setSubText(album)
+                   .setContentIntent(openPI)
+                   .setSmallIcon(R.mipmap.ic_launcher)
+                   .setVisibility(Notification.VISIBILITY_PUBLIC)
+                   .setOngoing(isPlaying)
+                   .setOnlyAlertOnce(true);
+
+            if (cover != null && !cover.isRecycled()) {
+                builder.setLargeIcon(cover);
+            }
+
+            Notification.Action prevAction = new Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_widget_prev),
+                "Previous",
+                prevPI
+            ).build();
+
+            Notification.Action playPauseAction = new Notification.Action.Builder(
+                Icon.createWithResource(this, isPlaying ? R.drawable.ic_widget_pause : R.drawable.ic_widget_play),
+                isPlaying ? "Pause" : "Play",
+                playPausePI
+            ).build();
+
+            Notification.Action nextAction = new Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_widget_next),
+                "Next",
+                nextPI
+            ).build();
+
+            builder.addAction(prevAction);
+            builder.addAction(playPauseAction);
+            builder.addAction(nextAction);
+
+            Notification.MediaStyle mediaStyle = new Notification.MediaStyle();
+            if (mediaSession != null) {
+                mediaStyle.setMediaSession(mediaSession.getSessionToken());
+            }
+            mediaStyle.setShowActionsInCompactView(0, 1, 2);
+            builder.setStyle(mediaStyle);
+
+            nm.notify(NOTIFICATION_ID, builder.build());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Bitmap getRoundedCornerBitmap(Bitmap bitmap, float cornerRadius) {
+        Bitmap output = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+        final RectF rectF = new RectF(rect);
+        canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(bitmap, rect, rect, paint);
+        return output;
+    }
+
+    private void updateLockScreenWallpaper(final Bitmap coverArt, final String trackKey, final boolean isPlaying) {
+        if (!isLockscreenWallpaperEnabled) return;
+
+        new Thread(() -> {
+            try {
+                WallpaperManager wm = WallpaperManager.getInstance(this);
+                if (!wm.isWallpaperSupported() || !wm.isSetWallpaperAllowed()) return;
+
+                if (!isPlaying) {
+                    if (currentWallpaperTrackKey != null) {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                wm.clear(WallpaperManager.FLAG_LOCK);
+                            }
+                        } catch (Exception ignored) {}
+                        currentWallpaperTrackKey = null;
+                    }
+                    return;
+                }
+
+                if (coverArt == null || coverArt.isRecycled()) return;
+                if (trackKey != null && trackKey.equals(currentWallpaperTrackKey)) return;
+
+                DisplayMetrics metrics = getResources().getDisplayMetrics();
+                int screenWidth = metrics.widthPixels > 0 ? metrics.widthPixels : 1080;
+                int screenHeight = metrics.heightPixels > 0 ? metrics.heightPixels : 2400;
+
+                Bitmap wallpaper = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(wallpaper);
+
+                // Dark sleek background
+                Paint bgPaint = new Paint();
+                bgPaint.setColor(0xFF0C0F17);
+                canvas.drawRect(0, 0, screenWidth, screenHeight, bgPaint);
+
+                // Subtle ambient glow from cover
+                try {
+                    Bitmap ambient = Bitmap.createScaledBitmap(coverArt, Math.max(10, screenWidth / 4), Math.max(10, screenHeight / 4), true);
+                    Paint blurPaint = new Paint();
+                    blurPaint.setAlpha(60);
+                    Rect srcRect = new Rect(0, 0, ambient.getWidth(), ambient.getHeight());
+                    Rect dstRect = new Rect(0, 0, screenWidth, screenHeight);
+                    canvas.drawBitmap(ambient, srcRect, dstRect, blurPaint);
+                    ambient.recycle();
+                } catch (Exception ignored) {}
+
+                // Center rounded card with the cover picture
+                int cardSize = (int) (screenWidth * 0.72f);
+                int left = (screenWidth - cardSize) / 2;
+                int top = (int) (screenHeight * 0.30f);
+
+                // Drop shadow
+                Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                shadowPaint.setColor(0x88000000);
+                RectF shadowRect = new RectF(left - 6, top + 10, left + cardSize + 6, top + cardSize + 20);
+                canvas.drawRoundRect(shadowRect, 32, 32, shadowPaint);
+
+                // Rounded album cover
+                Bitmap scaledCover = Bitmap.createScaledBitmap(coverArt, cardSize, cardSize, true);
+                Bitmap roundedCover = getRoundedCornerBitmap(scaledCover, 28);
+                canvas.drawBitmap(roundedCover, left, top, null);
+
+                scaledCover.recycle();
+                roundedCover.recycle();
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    wm.setBitmap(wallpaper, null, true, WallpaperManager.FLAG_LOCK);
+                    currentWallpaperTrackKey = trackKey;
+                }
+
+                wallpaper.recycle();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
     @Override
     public void onResume() {
         super.onResume();
@@ -291,7 +507,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
-        // Keep WebView active when app is minimized / screen is locked
         WebView webView = getBridge().getWebView();
         if (webView != null) {
             webView.onResume();
@@ -302,6 +517,17 @@ public class MainActivity extends BridgeActivity {
     public void onDestroy() {
         try {
             unregisterReceiver(onDownloadComplete);
+        } catch (Exception ignored) {}
+
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NOTIFICATION_ID);
+        } catch (Exception ignored) {}
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                WallpaperManager.getInstance(this).clear(WallpaperManager.FLAG_LOCK);
+            }
         } catch (Exception ignored) {}
 
         if (mediaSession != null) {
@@ -326,15 +552,21 @@ public class MainActivity extends BridgeActivity {
 
     private void requestAudioPermissions() {
         if (!hasPermission()) {
+            List<String> perms = new ArrayList<>();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_MEDIA_AUDIO}, PERMISSION_REQUEST_CODE);
+                perms.add(Manifest.permission.READ_MEDIA_AUDIO);
+                perms.add(Manifest.permission.POST_NOTIFICATIONS);
             } else {
-                ActivityCompat.requestPermissions(this, new String[]{
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                }, PERMISSION_REQUEST_CODE);
+                perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+                perms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             }
+            ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), PERMISSION_REQUEST_CODE);
         } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_REQUEST_CODE);
+                }
+            }
             notifyWebViewPermissionsGranted();
         }
     }
@@ -363,6 +595,19 @@ public class MainActivity extends BridgeActivity {
     }
 
     public class AndroidMusicBridge {
+
+        @JavascriptInterface
+        public void setLockscreenWallpaperEnabled(boolean enabled) {
+            isLockscreenWallpaperEnabled = enabled;
+            if (!enabled) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        WallpaperManager.getInstance(MainActivity.this).clear(WallpaperManager.FLAG_LOCK);
+                    }
+                    currentWallpaperTrackKey = null;
+                } catch (Exception ignored) {}
+            }
+        }
 
         @JavascriptInterface
         public void updatePlaybackState(boolean isPlaying, String title, String artist, String album, long durationMs, long positionMs, String coverUrl, boolean isShuffle) {
@@ -397,8 +642,10 @@ public class MainActivity extends BridgeActivity {
                         mediaSession.setMetadata(meta.build());
                     }
 
-                    Bitmap widgetArt = coverBitmapCache.get(coverUrl);
-                    MusicWidgetProvider.updateWidget(MainActivity.this, sTitle, sArtist, isPlaying, isShuffle, widgetArt);
+                    Bitmap cachedCover = coverBitmapCache.get(coverUrl);
+                    MusicWidgetProvider.updateWidget(MainActivity.this, sTitle, sArtist, isPlaying, isShuffle, cachedCover);
+                    updateNotification(sTitle, sArtist, sAlbum, isPlaying, cachedCover);
+                    updateLockScreenWallpaper(cachedCover, sTitle + "_" + sArtist, isPlaying);
 
                     // Decode artwork asynchronously if not cached yet
                     if (coverUrl != null && !coverUrl.isEmpty() && !coverBitmapCache.containsKey(coverUrl)) {
@@ -421,10 +668,14 @@ public class MainActivity extends BridgeActivity {
                                 }
 
                                 if (decoded != null) {
-                                    Bitmap scaled = Bitmap.createScaledBitmap(decoded, 120, 120, true);
+                                    Bitmap scaled = Bitmap.createScaledBitmap(decoded, 140, 140, true);
                                     coverBitmapCache.put(coverUrl, scaled);
+                                    final Bitmap finalDecoded = decoded;
                                     runOnUiThread(() -> {
                                         MusicWidgetProvider.updateWidget(MainActivity.this, sTitle, sArtist, isPlaying, isShuffle, scaled);
+                                        updateNotification(sTitle, sArtist, sAlbum, isPlaying, scaled);
+                                        updateLockScreenWallpaper(finalDecoded, sTitle + "_" + sArtist, isPlaying);
+
                                         if (mediaSession != null) {
                                             MediaMetadata.Builder meta = new MediaMetadata.Builder()
                                                 .putString(MediaMetadata.METADATA_KEY_TITLE, sTitle)

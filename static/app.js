@@ -5206,6 +5206,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Lock Screen Album Art Settings
+  const settingCardLockscreenArt = document.getElementById('setting-card-lockscreen-art');
+  const settingToggleLockscreenArt = document.getElementById('setting-toggle-lockscreen-art');
+  if (window.AndroidMusicScanner && settingCardLockscreenArt) {
+    settingCardLockscreenArt.style.display = 'block';
+    const savedLockscreen = localStorage.getItem('musicstudio_lockscreen_wallpaper');
+    if (savedLockscreen !== null && settingToggleLockscreenArt) {
+      const isEn = savedLockscreen === 'true';
+      settingToggleLockscreenArt.checked = isEn;
+      if (typeof window.AndroidMusicScanner.setLockscreenWallpaperEnabled === 'function') {
+        window.AndroidMusicScanner.setLockscreenWallpaperEnabled(isEn);
+      }
+    }
+  }
+  if (settingToggleLockscreenArt) {
+    settingToggleLockscreenArt.addEventListener('change', (e) => {
+      const enabled = e.target.checked;
+      localStorage.setItem('musicstudio_lockscreen_wallpaper', enabled ? 'true' : 'false');
+      if (window.AndroidMusicScanner && typeof window.AndroidMusicScanner.setLockscreenWallpaperEnabled === 'function') {
+        window.AndroidMusicScanner.setLockscreenWallpaperEnabled(enabled);
+      }
+      showToast('Lock Screen Cover Art: ' + (enabled ? 'Enabled' : 'Disabled'), 'info');
+    });
+  }
+
   function checkAndroidDefaultPlayerPrompt() {
     if (!window.AndroidMusicScanner) return;
     if (localStorage.getItem('musicstudio_default_player_prompted') === 'true') return;
