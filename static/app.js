@@ -426,7 +426,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const jsonStr = window.AndroidMusicScanner.scanDeviceAudio();
         const songs = JSON.parse(jsonStr || '[]');
         if (songs && songs.length > 0) {
-          localStorage.setItem('musicstudio_device_songs', JSON.stringify(songs));
+          try {
+            localStorage.setItem('musicstudio_device_songs', JSON.stringify(songs));
+          } catch (storageErr) {
+            console.warn('Could not cache all songs to localStorage (quota exceeded):', storageErr);
+          }
           return songs;
         }
       } catch (e) {
@@ -994,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const card = document.createElement('div');
           card.className = 'song-card' + (idx === currentSongIndex ? ' playing' : '');
           card.dataset.index = idx;
-          const coverUrl = song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
+          const coverUrl = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`));
 
           card.innerHTML = `
             <div class="song-card-art-wrap">
@@ -1031,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const row = document.createElement('div');
           row.className = 'song-row' + (idx === currentSongIndex ? ' playing' : '');
           row.dataset.index = idx;
-          const coverUrl = song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`);
+          const coverUrl = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.is_local_device ? 'placeholder.svg' : resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`));
           const durationFormatted = formatSeconds(song.duration || 0);
 
           row.innerHTML = `
@@ -1432,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topTracks.forEach((song, idx) => {
         const card = document.createElement('div');
         card.className = 'song-card';
-        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : 'placeholder.svg');
+        const coverUrl = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.filename ? resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`) : 'placeholder.svg');
 
         card.innerHTML = `
           <div class="song-card-art-wrap">
@@ -1462,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topTracks.forEach((song, idx) => {
         const row = document.createElement('div');
         row.className = 'song-row';
-        const coverUrl = song.cover_url || (song.filename ? `/api/songs/artwork/${encodeURIComponent(song.filename)}` : 'placeholder.svg');
+        const coverUrl = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.filename ? resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`) : 'placeholder.svg');
 
         row.innerHTML = `
           <div class="col-index">
@@ -1566,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function openDrawer(song, idx) {
     selectedSong = song;
     currentSongIndex = idx;
-    const coverUrl = `/api/songs/artwork/${encodeURIComponent(song.filename)}`;
+    const coverUrl = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.filename ? resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`) : 'placeholder.svg');
 
     drawerCover.src = coverUrl;
     drawerBitrate.textContent = song.bitrate || '320 kbps';
@@ -2175,44 +2179,80 @@ document.addEventListener('DOMContentLoaded', () => {
   async function downloadSingleTrack(track, btnEl) {
     if (!track) return;
 
-    // Direct Android native download via DownloadManager & MediaScanner
+    const query = track.query || `${track.title} ${track.artist}`;
+    const serverBase = getServerBaseUrl();
+
+    // 1. On Android native app: download full audio directly to phone storage (NEVER 30-sec preview!)
     if (window.AndroidMusicScanner && typeof window.AndroidMusicScanner.downloadTrackToDevice === 'function') {
-      const directAudioUrl = track.preview_url || (track.query ? resolveApiUrl(`/api/stream?q=${encodeURIComponent(track.query)}`) : '');
-      if (directAudioUrl) {
+      let fullAudioUrl = '';
+
+      if (serverBase) {
+        fullAudioUrl = `${serverBase}/api/stream?q=${encodeURIComponent(query)}`;
+      } else {
+        const resolved = resolveApiUrl(`/api/stream?q=${encodeURIComponent(query)}`);
+        if (resolved && (resolved.startsWith('http://') || resolved.startsWith('https://'))) {
+          fullAudioUrl = resolved;
+        }
+      }
+
+      if (fullAudioUrl) {
         if (btnEl) {
           btnEl.classList.add('downloading');
           btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Saving...</span>`;
         }
         try {
           const ok = window.AndroidMusicScanner.downloadTrackToDevice(
-            directAudioUrl,
+            fullAudioUrl,
             track.title || 'Track',
             track.artist || 'Artist',
             track.album || 'Music Studio',
             track.cover_url || ''
           );
           if (ok) {
-            showToast(`Saving "${track.title}" to device storage`, 'success');
+            showToast(`Saving full track "${track.title}" to phone storage`, 'success');
             if (btnEl) {
               btnEl.classList.remove('downloading');
               btnEl.classList.add('downloaded');
               btnEl.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span>Saved</span>`;
+            }
+            if (serverBase) {
+              fetch(`${serverBase}/api/download/track`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: track.title,
+                  artist: track.artist,
+                  album: track.album || 'Single',
+                  cover_url: track.cover_url,
+                  query: query,
+                  quality: settingQuality ? settingQuality.value : '320k',
+                  naming: settingNaming ? settingNaming.value : 'title'
+                })
+              }).catch(() => {});
             }
             return;
           }
         } catch (err) {
           console.warn('[AndroidBridge] downloadTrackToDevice error:', err);
         }
+      } else {
+        showToast('To download full 320kbps tracks to your phone, set your PC Server IP in Settings (e.g. http://192.168.1.xxx:5050)', 'warning');
+        if (btnEl) {
+          btnEl.classList.remove('downloading');
+          btnEl.innerHTML = `<span>Get</span>`;
+        }
+        return;
       }
     }
 
+    // 2. Server-side download (via yt-dlp 320kbps MP3 encoder)
     if (btnEl) {
       btnEl.classList.add('downloading');
       btnEl.innerHTML = `<span class="pulse-dot"></span> <span>Saving...</span>`;
     }
 
     try {
-      const res = await fetch('/api/download/track', {
+      const res = await fetch(resolveApiUrl('/api/download/track'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2220,7 +2260,7 @@ document.addEventListener('DOMContentLoaded', () => {
           artist: track.artist,
           album: track.album || 'Single',
           cover_url: track.cover_url,
-          query: track.query || `${track.title} ${track.artist}`,
+          query: query,
           quality: settingQuality ? settingQuality.value : '320k',
           naming: settingNaming ? settingNaming.value : 'title'
         })
@@ -2232,8 +2272,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       showToast(`Downloading: ${track.title}`, 'success');
-      statusBadge.className = 'hud-status-badge active-download';
-      statusBadge.textContent = 'Downloading';
+      if (statusBadge) {
+        statusBadge.className = 'hud-status-badge active-download';
+        statusBadge.textContent = 'Downloading';
+      }
 
       if (btnEl) {
         btnEl.classList.remove('downloading');
@@ -2241,7 +2283,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnEl.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span>Added</span>`;
       }
     } catch (e) {
-      showToast(e.message, 'error');
+      showToast(e.message || 'Could not connect to download server', 'error');
       if (btnEl) {
         btnEl.classList.remove('downloading');
         btnEl.innerHTML = `<span>Retry</span>`;
@@ -3316,6 +3358,13 @@ document.addEventListener('DOMContentLoaded', () => {
         audioUrl = song.file_path;
       }
       coverUrl = song.cover_url || 'placeholder.svg';
+      if ((!coverUrl || coverUrl === 'placeholder.svg') && window.AndroidMusicScanner && typeof window.AndroidMusicScanner.getTrackArtwork === 'function') {
+        const art = window.AndroidMusicScanner.getTrackArtwork(song.file_path, song.album_id || -1);
+        if (art && art.startsWith('data:image')) {
+          coverUrl = art;
+          song.cover_url = art;
+        }
+      }
     } else if (song.is_local_device && song.file_ref_id) {
       const localFile = window.localDeviceAudioFiles.get(song.file_ref_id);
       if (localFile) {
@@ -4117,7 +4166,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (fsTitle) fsTitle.textContent = song.title || 'Unknown Track';
       if (fsArtist) fsArtist.textContent = song.artist || 'Unknown Artist';
       if (fsAlbum) fsAlbum.textContent = song.album || 'Music Studio Master';
-      if (fsCover) fsCover.src = `/api/songs/artwork/${encodeURIComponent(song.filename)}`;
+      if (fsCover) fsCover.src = (song.cover_url && song.cover_url !== 'placeholder.svg') ? song.cover_url : (song.filename ? resolveApiUrl(`/api/songs/artwork/${encodeURIComponent(song.filename)}`) : 'placeholder.svg');
     }
     updatePlayIcon(isPlaying);
     updateShuffleUI();

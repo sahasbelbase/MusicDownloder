@@ -772,30 +772,55 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
-        public String getTrackArtwork(String filePath) {
-            if (filePath == null || filePath.isEmpty()) return "";
-            MediaMetadataRetriever mmr = new MediaMetadataRetriever();
-            try {
-                mmr.setDataSource(filePath);
-                byte[] rawArt = mmr.getEmbeddedPicture();
-                if (rawArt != null && rawArt.length > 0) {
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
-                    if (bitmap != null) {
-                        int targetSize = 120;
-                        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
-                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                        scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
-                        byte[] jpegBytes = out.toByteArray();
-                        scaled.recycle();
-                        bitmap.recycle();
-                        return "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+        public String getTrackArtwork(String filePath, long albumId) {
+            if (albumId > 0) {
+                try {
+                    Uri artUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId);
+                    try (InputStream is = getContentResolver().openInputStream(artUri)) {
+                        if (is != null) {
+                            Bitmap bm = BitmapFactory.decodeStream(is);
+                            if (bm != null) {
+                                Bitmap scaled = Bitmap.createScaledBitmap(bm, 120, 120, true);
+                                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
+                                String res = "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+                                scaled.recycle();
+                                bm.recycle();
+                                return res;
+                            }
+                        }
                     }
+                } catch (Exception ignored) {}
+            }
+            if (filePath != null && !filePath.isEmpty()) {
+                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                try {
+                    mmr.setDataSource(filePath);
+                    byte[] rawArt = mmr.getEmbeddedPicture();
+                    if (rawArt != null && rawArt.length > 0) {
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
+                        if (bitmap != null) {
+                            int targetSize = 120;
+                            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
+                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                            scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
+                            byte[] jpegBytes = out.toByteArray();
+                            scaled.recycle();
+                            bitmap.recycle();
+                            return "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+                        }
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    try { mmr.release(); } catch (Exception ignored) {}
                 }
-            } catch (Exception ignored) {
-            } finally {
-                try { mmr.release(); } catch (Exception ignored) {}
             }
             return "";
+        }
+
+        @JavascriptInterface
+        public String getTrackArtwork(String filePath) {
+            return getTrackArtwork(filePath, -1);
         }
 
         @JavascriptInterface
@@ -805,6 +830,8 @@ public class MainActivity extends BridgeActivity {
                 requestAudioPermissions();
                 return songArray.toString();
             }
+
+            Map<Long, String> albumArtCache = new HashMap<>();
 
             try {
                 Uri collection;
@@ -864,8 +891,67 @@ public class MainActivity extends BridgeActivity {
                             String cleanAlbum = (album != null && !album.equals("<unknown>") && !album.isEmpty()) ? album : "Device Music";
 
                             String coverUrl = "placeholder.svg";
-                            if (albumId > 0) {
-                                coverUrl = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId).toString();
+                            if (albumId > 0 && albumArtCache.containsKey(albumId)) {
+                                coverUrl = albumArtCache.get(albumId);
+                            } else {
+                                if (albumId > 0) {
+                                    try {
+                                        Uri artUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId);
+                                        try (InputStream is = getContentResolver().openInputStream(artUri)) {
+                                            if (is != null) {
+                                                Bitmap bm = BitmapFactory.decodeStream(is);
+                                                if (bm != null) {
+                                                    Bitmap scaled = Bitmap.createScaledBitmap(bm, 120, 120, true);
+                                                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                                    scaled.compress(Bitmap.CompressFormat.JPEG, 70, out);
+                                                    coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+                                                    scaled.recycle();
+                                                    bm.recycle();
+                                                }
+                                            }
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+
+                                if ((coverUrl == null || coverUrl.equals("placeholder.svg")) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    try {
+                                        Uri trackUri = ContentUris.withAppendedId(collection, id);
+                                        Bitmap bm = getContentResolver().loadThumbnail(trackUri, new android.util.Size(120, 120), null);
+                                        if (bm != null) {
+                                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                            bm.compress(Bitmap.CompressFormat.JPEG, 70, out);
+                                            coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+                                            bm.recycle();
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+
+                                if ((coverUrl == null || coverUrl.equals("placeholder.svg")) && dataPath != null && !dataPath.isEmpty()) {
+                                    MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                                    try {
+                                        mmr.setDataSource(dataPath);
+                                        byte[] rawArt = mmr.getEmbeddedPicture();
+                                        if (rawArt != null && rawArt.length > 0) {
+                                            Bitmap bm = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
+                                            if (bm != null) {
+                                                Bitmap scaled = Bitmap.createScaledBitmap(bm, 120, 120, true);
+                                                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                                scaled.compress(Bitmap.CompressFormat.JPEG, 70, out);
+                                                coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+                                                scaled.recycle();
+                                                bm.recycle();
+                                            }
+                                        }
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        try { mmr.release(); } catch (Exception ignored) {}
+                                    }
+                                }
+
+                                if (coverUrl == null || coverUrl.isEmpty()) coverUrl = "placeholder.svg";
+                                if (albumId > 0) {
+                                    albumArtCache.put(albumId, coverUrl);
+                                }
                             }
 
                             JSONObject song = new JSONObject();
