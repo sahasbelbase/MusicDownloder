@@ -4993,6 +4993,14 @@ body.platform-android #mac-notch-hud {
    On Android (body.platform-android) ensure bottom nav and compact sizing
    ========================================================================== */
 
+/* Android: Ensure all touch interactions work without delay */
+body.platform-android {
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Clean standard touch event handling */
+
 /* Android: Always show bottom nav with high specificity */
 body.platform-android .mobile-bottom-nav {
   display: flex !important;
@@ -5128,4 +5136,91 @@ body.platform-android .mobile-nav-item.active svg {
   .song-card-artist {
     font-size: 0.68rem !important;
   }
+}
+
+/* Android Default Music Player Prompt Banner */
+.default-player-prompt-banner {
+  position: fixed;
+  top: 16px;
+  left: 12px;
+  right: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+  background: rgba(18, 22, 32, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: slideDownBanner 0.3s ease-out;
+}
+
+@keyframes slideDownBanner {
+  from { transform: translateY(-30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.default-player-prompt-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.default-player-prompt-icon {
+  font-size: 1.4rem;
+  background: rgba(16, 185, 129, 0.15);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.default-player-prompt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.default-player-prompt-text strong {
+  font-size: 0.86rem;
+  color: #FFFFFF;
+}
+
+.default-player-prompt-text span {
+  font-size: 0.74rem;
+  color: #9EA7B8;
+}
+
+.default-player-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.prompt-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s ease;
+}
+
+.prompt-btn.primary {
+  background: #10B981;
+  color: #FFFFFF;
+}
+
+.prompt-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #E2E8F0;
 }

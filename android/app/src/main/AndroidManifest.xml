@@ -21,18 +21,64 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Audio File Opener Intent Filters -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-ogg" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\.mp3" />
+                <data android:pathPattern=".*\.m4a" />
+                <data android:pathPattern=".*\.flac" />
+                <data android:pathPattern=".*\.wav" />
+                <data android:pathPattern=".*\.aac" />
+                <data android:pathPattern=".*\.ogg" />
             </intent-filter>
 
         </activity>
 
+        <!-- Home Screen App Widget -->
+        <receiver
+            android:name=".MusicWidgetProvider"
+            android:label="@string/app_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.musicstudio.app.ACTION_WIDGET_PLAY_PAUSE" />
+                <action android:name="com.musicstudio.app.ACTION_WIDGET_PREV" />
+                <action android:name="com.musicstudio.app.ACTION_WIDGET_NEXT" />
+                <action android:name="com.musicstudio.app.ACTION_WIDGET_SHUFFLE" />
+                <action android:name="com.musicstudio.app.ACTION_UPDATE_WIDGET_STATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/music_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities=".fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
+                android:resource="@xml/file_paths" />
         </provider>
     </application>
 

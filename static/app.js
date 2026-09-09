@@ -3,6 +3,11 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // ===== ANDROID PLATFORM INITIALIZATION =====
+  if (/Android/i.test(navigator.userAgent)) {
+    document.body.classList.add('platform-android');
+  }
+
   // ==================== UNIVERSAL API & SERVER ROUTING ====================
   function getServerBaseUrl() {
     const custom = (localStorage.getItem('musicstudio_server_url') || '').trim();
@@ -340,28 +345,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(btn => {
-    // Ensure touch targets work instantly on Android WebView
-    btn.style.touchAction = 'manipulation';
-    btn.style.webkitTapHighlightColor = 'transparent';
-    btn.style.userSelect = 'none';
-
-    const handleNavTap = (e) => {
-      e.preventDefault();
+    btn.addEventListener('click', (e) => {
       const target = btn.getAttribute('data-tab');
       if (isDeviceOffline && (target === 'discover' || target === 'downloader')) {
+        e.preventDefault();
         showToast('\u26a1 Device is offline: Discover & Downloader require internet. Showing your Library.', 'warning');
         activateTab('library');
         return;
       }
       if (target) activateTab(target);
-    };
-
-    btn.addEventListener('click', handleNavTap);
-    // touchend fallback: fires before click on Android, removes 300ms delay
-    btn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      handleNavTap(e);
-    }, { passive: false });
+    });
   });
 
   // ==================== URL INPUT AUTO-DETECTION ====================
@@ -3583,6 +3576,10 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('musicstudio_shuffle', isShuffle ? 'true' : 'false');
       generateShuffleQueue(currentSongIndex);
       updateShuffleUI();
+      broadcastPlaybackState();
+      showToast(isShuffle ? 'Shuffle: On' : 'Shuffle: Off', 'info');
+    });
+  }
 
   // Queue UI Event Listeners
   if (playerQueueBtn) {
@@ -3611,10 +3608,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateQueueBadge();
   setTimeout(restoreLastPlaybackState, 350);
-
-      showToast(isShuffle ? 'Shuffle: On' : 'Shuffle: Off', 'info');
-    });
-  }
 
   if (playerRepeat) {
     playerRepeat.addEventListener('click', () => {
@@ -3689,7 +3682,11 @@ document.addEventListener('DOMContentLoaded', () => {
       title = s.title || title;
       artist = s.artist || artist;
       album = s.album || album;
-      coverUrl = `/api/songs/artwork/${encodeURIComponent(s.filename)}`;
+      if (s.cover_url) {
+        coverUrl = s.cover_url;
+      } else {
+        coverUrl = `/api/songs/artwork/${encodeURIComponent(s.filename)}`;
+      }
     }
 
     let dur = (audioEngine.duration && isFinite(audioEngine.duration)) ? audioEngine.duration : 0;
@@ -3697,6 +3694,24 @@ document.addEventListener('DOMContentLoaded', () => {
       dur = currentStreamingTrack.duration;
     }
     let curTime = (audioEngine.currentTime && isFinite(audioEngine.currentTime)) ? audioEngine.currentTime : 0;
+
+    // Synchronize to Android Native MediaSession (AirPods / Bluetooth) and Home Screen Widget
+    if (window.AndroidMusicScanner && typeof window.AndroidMusicScanner.updatePlaybackState === 'function') {
+      try {
+        window.AndroidMusicScanner.updatePlaybackState(
+          !audioEngine.paused,
+          title,
+          artist,
+          album,
+          Math.round(dur * 1000),
+          Math.round(curTime * 1000),
+          coverUrl,
+          !!isShuffle
+        );
+      } catch (e) {
+        console.warn('Android updatePlaybackState error:', e);
+      }
+    }
 
     fetch('/api/playback', {
       method: 'POST',
@@ -5127,6 +5142,109 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+
+  // ==================== ANDROID NATIVE INTEGRATION ====================
+  // AirPods, Bluetooth headset, and Home Screen Widget Controls
+  window.androidMediaControl = function(action) {
+    console.log('[Android Native Media Control]:', action);
+    if (action === 'play') {
+      if (audioEngine.paused) togglePlay();
+    } else if (action === 'pause') {
+      if (!audioEngine.paused) togglePlay();
+    } else if (action === 'toggle' || action === 'play_pause') {
+      togglePlay();
+    } else if (action === 'next') {
+      playNextTrack();
+    } else if (action === 'prev' || action === 'previous') {
+      playPrevTrack();
+    } else if (action === 'shuffle') {
+      isShuffle = !isShuffle;
+      localStorage.setItem('musicstudio_shuffle', isShuffle ? 'true' : 'false');
+      generateShuffleQueue(currentSongIndex);
+      updateShuffleUI();
+      broadcastPlaybackState();
+      showToast(isShuffle ? 'Shuffle: On' : 'Shuffle: Off', 'info');
+    }
+  };
+
+  // Android File Opener (ACTION_VIEW from Files, WhatsApp, Downloads, etc.)
+  window.onAndroidOpenFile = function(songData) {
+    try {
+      const song = typeof songData === 'string' ? JSON.parse(songData) : songData;
+      if (!song) return;
+      const existingIdx = rawLibrarySongs.findIndex(s =>
+        (s.content_uri && s.content_uri === song.content_uri) ||
+        (s.file_path && s.file_path === song.file_path)
+      );
+      if (existingIdx !== -1) {
+        currentSongIndex = existingIdx;
+        playTrack(existingIdx);
+      } else {
+        rawLibrarySongs.unshift(song);
+        applySortAndFilter();
+        playTrack(0);
+      }
+      showToast(`Playing: ${song.title || 'Audio File'}`, 'success');
+    } catch (e) {
+      console.error('Error handling opened Android audio file:', e);
+    }
+  };
+
+  // Default Music Player Settings & First-Run Prompt
+  const btnSetDefaultPlayer = document.getElementById('btn-set-default-player');
+  const settingCardDefaultPlayer = document.getElementById('setting-card-default-player');
+  if (window.AndroidMusicScanner && settingCardDefaultPlayer) {
+    settingCardDefaultPlayer.style.display = 'block';
+  }
+  if (btnSetDefaultPlayer) {
+    btnSetDefaultPlayer.addEventListener('click', () => {
+      if (window.AndroidMusicScanner && typeof window.AndroidMusicScanner.openDefaultAppsSettings === 'function') {
+        window.AndroidMusicScanner.openDefaultAppsSettings();
+      } else {
+        showToast('Only available when running on Android device', 'info');
+      }
+    });
+  }
+
+  function checkAndroidDefaultPlayerPrompt() {
+    if (!window.AndroidMusicScanner) return;
+    if (localStorage.getItem('musicstudio_default_player_prompted') === 'true') return;
+
+    setTimeout(() => {
+      if (document.getElementById('default-player-banner')) return;
+      const banner = document.createElement('div');
+      banner.id = 'default-player-banner';
+      banner.className = 'default-player-prompt-banner';
+      banner.innerHTML = `
+        <div class="default-player-prompt-content">
+          <div class="default-player-prompt-icon">🎵</div>
+          <div class="default-player-prompt-text">
+            <strong>Set as Default Music Player?</strong>
+            <span>Tap to make Music Studio your phone's default player for audio files.</span>
+          </div>
+        </div>
+        <div class="default-player-prompt-actions">
+          <button id="btn-prompt-set-default" class="prompt-btn primary">Set as Default</button>
+          <button id="btn-prompt-dismiss-default" class="prompt-btn secondary">Not Now</button>
+        </div>
+      `;
+      document.body.appendChild(banner);
+
+      document.getElementById('btn-prompt-set-default')?.addEventListener('click', () => {
+        localStorage.setItem('musicstudio_default_player_prompted', 'true');
+        banner.remove();
+        if (typeof window.AndroidMusicScanner.openDefaultAppsSettings === 'function') {
+          window.AndroidMusicScanner.openDefaultAppsSettings();
+        }
+      });
+
+      document.getElementById('btn-prompt-dismiss-default')?.addEventListener('click', () => {
+        localStorage.setItem('musicstudio_default_player_prompted', 'true');
+        banner.remove();
+      });
+    }, 2000);
+  }
+  checkAndroidDefaultPlayerPrompt();
 
   // Initial Load
   initOfflineDetection();

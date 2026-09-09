@@ -1,7 +1,9 @@
 package com.musicstudio.app;
 
 import android.Manifest;
+import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
@@ -10,31 +12,50 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.MediaMetadata;
 import android.media.MediaMetadataRetriever;
+import android.media.MediaScannerConnection;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
-import android.app.DownloadManager;
-import android.media.MediaScannerConnection;
 import android.os.Environment;
+import android.provider.MediaStore;
+import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Base64;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-
 import android.webkit.JavascriptInterface;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.BridgeActivity;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends BridgeActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 2026;
+    private static MainActivity instance;
+
+    private MediaSession mediaSession;
+    private String pendingMediaAction = null;
+    private String pendingOpenAudioJson = null;
+    private final Map<String, Bitmap> coverBitmapCache = new HashMap<>();
+
+    public static MainActivity getInstance() {
+        return instance;
+    }
 
     private final BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
         @Override
@@ -82,13 +103,21 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        instance = this;
         super.onCreate(savedInstanceState);
 
         WebView webView = getBridge().getWebView();
         if (webView != null) {
-            webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+            WebSettings settings = webView.getSettings();
+            settings.setMediaPlaybackRequiresUserGesture(false);
+            settings.setAllowFileAccess(true);
+            settings.setAllowContentAccess(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
             webView.addJavascriptInterface(new AndroidMusicBridge(), "AndroidMusicScanner");
         }
+
+        initMediaSession();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
@@ -96,7 +125,159 @@ public class MainActivity extends BridgeActivity {
             registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
         }
 
+        handleIncomingIntent(getIntent());
+
         requestAudioPermissions();
+    }
+
+    private void initMediaSession() {
+        try {
+            mediaSession = new MediaSession(this, "MusicStudioSession");
+            mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            mediaSession.setCallback(new MediaSession.Callback() {
+                @Override
+                public void onPlay() {
+                    dispatchMediaControl("play");
+                }
+
+                @Override
+                public void onPause() {
+                    dispatchMediaControl("pause");
+                }
+
+                @Override
+                public void onSkipToNext() {
+                    dispatchMediaControl("next");
+                }
+
+                @Override
+                public void onSkipToPrevious() {
+                    dispatchMediaControl("prev");
+                }
+
+                @Override
+                public void onStop() {
+                    dispatchMediaControl("pause");
+                }
+
+                @Override
+                public boolean onMediaButtonEvent(Intent mediaButtonIntent) {
+                    return super.onMediaButtonEvent(mediaButtonIntent);
+                }
+            });
+
+            PlaybackState state = new PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE |
+                            PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_SKIP_TO_NEXT |
+                            PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP)
+                .setState(PlaybackState.STATE_PAUSED, 0, 1.0f)
+                .build();
+            mediaSession.setPlaybackState(state);
+            mediaSession.setActive(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void dispatchMediaControl(final String action) {
+        runOnUiThread(() -> {
+            WebView webView = getBridge().getWebView();
+            if (webView != null) {
+                webView.evaluateJavascript("if (typeof window.androidMediaControl === 'function') { window.androidMediaControl('" + action + "'); }", null);
+            }
+        });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    private void handleIncomingIntent(Intent intent) {
+        if (intent == null) return;
+
+        if (intent.hasExtra("extra_media_action")) {
+            String act = intent.getStringExtra("extra_media_action");
+            if (act != null) {
+                dispatchMediaControl(act);
+            }
+        }
+
+        if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+            Uri audioUri = intent.getData();
+            if (audioUri != null) {
+                processOpenedAudioUri(audioUri);
+            }
+        }
+    }
+
+    private void processOpenedAudioUri(Uri uri) {
+        try {
+            String title = "Audio File";
+            String artist = "Local Music";
+            long durationSec = 0;
+            String path = null;
+
+            ContentResolver cr = getContentResolver();
+
+            try (Cursor c = cr.query(uri, null, null, null, null)) {
+                if (c != null && c.moveToFirst()) {
+                    int nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIdx != -1) {
+                        String displayName = c.getString(nameIdx);
+                        if (displayName != null && !displayName.isEmpty()) {
+                            int dotIdx = displayName.lastIndexOf("."); if (dotIdx > 0) { title = displayName.substring(0, dotIdx); } else { title = displayName; }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+            try {
+                mmr.setDataSource(this, uri);
+                String metaTitle = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+                String metaArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+                String metaDur = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                if (metaTitle != null && !metaTitle.trim().isEmpty()) title = metaTitle.trim();
+                if (metaArtist != null && !metaArtist.trim().isEmpty()) artist = metaArtist.trim();
+                if (metaDur != null) {
+                    try {
+                        durationSec = Math.round(Long.parseLong(metaDur) / 1000.0);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try { mmr.release(); } catch (Exception ignored) {}
+            }
+
+            JSONObject song = new JSONObject();
+            song.put("id", "intent_" + System.currentTimeMillis());
+            song.put("title", title);
+            song.put("artist", artist);
+            song.put("album", "Opened Audio");
+            song.put("duration", durationSec);
+            song.put("content_uri", uri.toString());
+            song.put("file_path", uri.toString());
+            song.put("cover_url", "placeholder.svg");
+            song.put("is_local_device", true);
+            song.put("is_android_mediastore", true);
+            song.put("auto_play", true);
+
+            final String songJson = song.toString();
+            pendingOpenAudioJson = songJson;
+
+            runOnUiThread(() -> {
+                WebView webView = getBridge().getWebView();
+                if (webView != null) {
+                    webView.evaluateJavascript("if (typeof window.onAndroidOpenFile === 'function') { window.onAndroidOpenFile(" + JSONObject.quote(songJson) + "); }", null);
+                    pendingOpenAudioJson = null;
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -110,7 +291,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
-        // Keep WebView audio running when app is minimized / screen is locked
+        // Keep WebView active when app is minimized / screen is locked
         WebView webView = getBridge().getWebView();
         if (webView != null) {
             webView.onResume();
@@ -122,6 +303,16 @@ public class MainActivity extends BridgeActivity {
         try {
             unregisterReceiver(onDownloadComplete);
         } catch (Exception ignored) {}
+
+        if (mediaSession != null) {
+            mediaSession.setActive(false);
+            mediaSession.release();
+            mediaSession = null;
+        }
+
+        if (instance == this) {
+            instance = null;
+        }
         super.onDestroy();
     }
 
@@ -163,11 +354,112 @@ public class MainActivity extends BridgeActivity {
             WebView webView = getBridge().getWebView();
             if (webView != null) {
                 webView.evaluateJavascript("if (typeof window.onAndroidPermissionsGranted === 'function') { window.onAndroidPermissionsGranted(); }", null);
+                if (pendingOpenAudioJson != null) {
+                    webView.evaluateJavascript("if (typeof window.onAndroidOpenFile === 'function') { window.onAndroidOpenFile(" + JSONObject.quote(pendingOpenAudioJson) + "); }", null);
+                    pendingOpenAudioJson = null;
+                }
             }
         });
     }
 
     public class AndroidMusicBridge {
+
+        @JavascriptInterface
+        public void updatePlaybackState(boolean isPlaying, String title, String artist, String album, long durationMs, long positionMs, String coverUrl, boolean isShuffle) {
+            runOnUiThread(() -> {
+                try {
+                    String sTitle = (title != null && !title.isEmpty()) ? title : "Music Studio";
+                    String sArtist = (artist != null && !artist.isEmpty()) ? artist : "Playing";
+                    String sAlbum = (album != null && !album.isEmpty()) ? album : "Music Studio";
+
+                    if (mediaSession != null) {
+                        long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE |
+                                      PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_SKIP_TO_NEXT |
+                                      PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO |
+                                      PlaybackState.ACTION_STOP;
+
+                        PlaybackState state = new PlaybackState.Builder()
+                            .setActions(actions)
+                            .setState(isPlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, positionMs, 1.0f)
+                            .build();
+                        mediaSession.setPlaybackState(state);
+
+                        MediaMetadata.Builder meta = new MediaMetadata.Builder()
+                            .putString(MediaMetadata.METADATA_KEY_TITLE, sTitle)
+                            .putString(MediaMetadata.METADATA_KEY_ARTIST, sArtist)
+                            .putString(MediaMetadata.METADATA_KEY_ALBUM, sAlbum)
+                            .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
+
+                        Bitmap cachedArt = coverBitmapCache.get(coverUrl);
+                        if (cachedArt != null && !cachedArt.isRecycled()) {
+                            meta.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cachedArt);
+                        }
+                        mediaSession.setMetadata(meta.build());
+                    }
+
+                    Bitmap widgetArt = coverBitmapCache.get(coverUrl);
+                    MusicWidgetProvider.updateWidget(MainActivity.this, sTitle, sArtist, isPlaying, isShuffle, widgetArt);
+
+                    // Decode artwork asynchronously if not cached yet
+                    if (coverUrl != null && !coverUrl.isEmpty() && !coverBitmapCache.containsKey(coverUrl)) {
+                        new Thread(() -> {
+                            try {
+                                Bitmap decoded = null;
+                                if (coverUrl.startsWith("data:image")) {
+                                    int comma = coverUrl.indexOf(',');
+                                    if (comma != -1) {
+                                        byte[] bytes = Base64.decode(coverUrl.substring(comma + 1), Base64.DEFAULT);
+                                        decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                                    }
+                                } else if (coverUrl.startsWith("content://")) {
+                                    try (InputStream is = getContentResolver().openInputStream(Uri.parse(coverUrl))) {
+                                        if (is != null) decoded = BitmapFactory.decodeStream(is);
+                                    }
+                                } else if (coverUrl.startsWith("/") || coverUrl.startsWith("file://")) {
+                                    String path = coverUrl.replaceFirst("^file://", "");
+                                    decoded = BitmapFactory.decodeFile(path);
+                                }
+
+                                if (decoded != null) {
+                                    Bitmap scaled = Bitmap.createScaledBitmap(decoded, 120, 120, true);
+                                    coverBitmapCache.put(coverUrl, scaled);
+                                    runOnUiThread(() -> {
+                                        MusicWidgetProvider.updateWidget(MainActivity.this, sTitle, sArtist, isPlaying, isShuffle, scaled);
+                                        if (mediaSession != null) {
+                                            MediaMetadata.Builder meta = new MediaMetadata.Builder()
+                                                .putString(MediaMetadata.METADATA_KEY_TITLE, sTitle)
+                                                .putString(MediaMetadata.METADATA_KEY_ARTIST, sArtist)
+                                                .putString(MediaMetadata.METADATA_KEY_ALBUM, sAlbum)
+                                                .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
+                                                .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, scaled);
+                                            mediaSession.setMetadata(meta.build());
+                                        }
+                                    });
+                                }
+                            } catch (Exception ignored) {}
+                        }).start();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openDefaultAppsSettings() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+                startActivity(intent);
+            } catch (Exception e1) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                } catch (Exception e2) {
+                    e2.printStackTrace();
+                }
+            }
+        }
 
         @JavascriptInterface
         public boolean downloadTrackToDevice(String audioUrl, String title, String artist, String album, String coverUrl) {
@@ -238,7 +530,7 @@ public class MainActivity extends BridgeActivity {
                 if (rawArt != null && rawArt.length > 0) {
                     Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
                     if (bitmap != null) {
-                        int targetSize = 140;
+                        int targetSize = 120;
                         Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
                         ByteArrayOutputStream out = new ByteArrayOutputStream();
                         scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
@@ -263,8 +555,6 @@ public class MainActivity extends BridgeActivity {
                 return songArray.toString();
             }
 
-            Map<String, String> albumCoverCache = new HashMap<>();
-
             try {
                 Uri collection;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -278,6 +568,7 @@ public class MainActivity extends BridgeActivity {
                     MediaStore.Audio.Media.TITLE,
                     MediaStore.Audio.Media.ARTIST,
                     MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.ALBUM_ID,
                     MediaStore.Audio.Media.DURATION,
                     MediaStore.Audio.Media.DATA,
                     MediaStore.Audio.Media.SIZE,
@@ -298,6 +589,7 @@ public class MainActivity extends BridgeActivity {
                         int titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
                         int artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
                         int albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+                        int albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID);
                         int durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
                         int dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA);
                         int sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE);
@@ -308,6 +600,7 @@ public class MainActivity extends BridgeActivity {
                             String title = cursor.getString(titleCol);
                             String artist = cursor.getString(artistCol);
                             String album = cursor.getString(albumCol);
+                            long albumId = (albumIdCol != -1) ? cursor.getLong(albumIdCol) : -1;
                             long durationMs = cursor.getLong(durationCol);
                             String dataPath = cursor.getString(dataCol);
                             long sizeBytes = cursor.getLong(sizeCol);
@@ -318,67 +611,10 @@ public class MainActivity extends BridgeActivity {
                             String cleanTitle = (title != null && !title.isEmpty()) ? title : "Unknown Title";
                             String cleanArtist = (artist != null && !artist.equals("<unknown>") && !artist.isEmpty()) ? artist : "Mobile Audio";
                             String cleanAlbum = (album != null && !album.equals("<unknown>") && !album.isEmpty()) ? album : "Device Music";
-                            String songGenre = "General";
 
-                            String albumKey = cleanArtist + "_" + cleanAlbum;
-                            String coverUrl = albumCoverCache.get(albumKey);
-
-                            if (coverUrl == null) {
-                                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
-                                try {
-                                    mmr.setDataSource(dataPath);
-                                    byte[] rawArt = mmr.getEmbeddedPicture();
-                                    if (rawArt != null && rawArt.length > 0) {
-                                        Bitmap bitmap = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length);
-                                        if (bitmap != null) {
-                                            int targetSize = 140;
-                                            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true);
-                                            ByteArrayOutputStream out = new ByteArrayOutputStream();
-                                            scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
-                                            byte[] jpegBytes = out.toByteArray();
-                                            scaled.recycle();
-                                            bitmap.recycle();
-                                            coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
-                                        }
-                                    }
-
-                                    // Fallback to folder artwork (cover.jpg, folder.jpg) if no embedded art
-                                    if (coverUrl == null) {
-                                        File parentDir = new File(dataPath).getParentFile();
-                                        if (parentDir != null && parentDir.isDirectory()) {
-                                            String[] candidates = {"cover.jpg", "cover.png", "folder.jpg", "album.jpg", "art.jpg"};
-                                            for (String cand : candidates) {
-                                                File candFile = new File(parentDir, cand);
-                                                if (candFile.exists() && candFile.length() > 0) {
-                                                    Bitmap bitmap = BitmapFactory.decodeFile(candFile.getAbsolutePath());
-                                                    if (bitmap != null) {
-                                                        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, 140, 140, true);
-                                                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                                                        scaled.compress(Bitmap.CompressFormat.JPEG, 75, out);
-                                                        byte[] jpegBytes = out.toByteArray();
-                                                        scaled.recycle();
-                                                        bitmap.recycle();
-                                                        coverUrl = "data:image/jpeg;base64," + Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    String genreMeta = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
-                                    if (genreMeta != null && !genreMeta.trim().isEmpty()) {
-                                        songGenre = genreMeta.trim();
-                                    }
-                                } catch (Exception ignored) {
-                                } finally {
-                                    try { mmr.release(); } catch (Exception ignored) {}
-                                }
-
-                                if (coverUrl == null) {
-                                    coverUrl = "placeholder.svg";
-                                }
-                                albumCoverCache.put(albumKey, coverUrl);
+                            String coverUrl = "placeholder.svg";
+                            if (albumId > 0) {
+                                coverUrl = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId).toString();
                             }
 
                             JSONObject song = new JSONObject();
@@ -386,16 +622,17 @@ public class MainActivity extends BridgeActivity {
                             song.put("title", cleanTitle);
                             song.put("artist", cleanArtist);
                             song.put("album", cleanAlbum);
-                            song.put("genre", songGenre);
+                            song.put("album_id", albumId);
+                            song.put("genre", "General");
                             song.put("duration", durationMs > 0 ? Math.round(durationMs / 1000.0) : 0);
                             song.put("size_mb", Math.round((sizeBytes / (1024.0 * 1024.0)) * 100.0) / 100.0);
                             song.put("filename", dataPath);
                             song.put("file_path", dataPath);
                             song.put("content_uri", ContentUris.withAppendedId(collection, id).toString());
+                            song.put("cover_url", coverUrl);
                             song.put("is_local_device", true);
                             song.put("is_android_mediastore", true);
                             song.put("mtime", mtime);
-                            song.put("cover_url", coverUrl);
 
                             songArray.put(song);
                         }
